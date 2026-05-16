@@ -38,6 +38,37 @@ wheels = [
 ]
 
 [[package]]
+name = "ai-edge-litert"
+version = "2.1.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "backports-strenum" },
+    { name = "flatbuffers" },
+    { name = "numpy" },
+    { name = "protobuf" },
+    { name = "tqdm" },
+    { name = "typing-extensions" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e4/7f/ec543ef2f79cf5b5909521cb614162ec1e6fc9df863ccae23142260dd8c7/ai_edge_litert-2.1.5-cp311-cp311-macosx_12_0_arm64.whl", hash = "sha256:cf9a6e98677d26fd900ec9459a19cf5cce9f94c64132d728485eeb9accd5c162", size = 9709620, upload-time = "2026-05-15T23:34:15.065Z" },
+    { url = "https://files.pythonhosted.org/packages/3b/84/a1ec0a9c6c345e79207b2a3a2a8e1e9572f412143100dc650f332c53d84f/ai_edge_litert-2.1.5-cp311-cp311-manylinux_2_27_aarch64.whl", hash = "sha256:1edf83d132919b0b95bb5ded64e79bfed018168d3584c28fa30a8eb0d3bfca6b", size = 12866358, upload-time = "2026-05-15T23:11:20.539Z" },
+    { url = "https://files.pythonhosted.org/packages/9a/44/3c365bc63b744316ef61c75761e53f34f9cdc0ba31fddc1d1039ca5322b4/ai_edge_litert-2.1.5-cp311-cp311-manylinux_2_27_x86_64.whl", hash = "sha256:7c54e45589831fbaeec1481df530e336d0112002a6193bc28f7aafa5f4898a3a", size = 17566472, upload-time = "2026-05-15T23:05:31.285Z" },
+    { url = "https://files.pythonhosted.org/packages/4f/47/d3956aeddc00194463dcc83991ad58759b1a94672d66e7b7c5d2be1d95de/ai_edge_litert-2.1.5-cp311-cp311-win_amd64.whl", hash = "sha256:ad7844c7c2431dfe36debf6d4541f27af198848ed3090cbaacbdf2bb2cd377c7", size = 17753382, upload-time = "2026-05-15T23:39:22.178Z" },
+    { url = "https://files.pythonhosted.org/packages/d1/37/cf525a4ed6aff573b10a162b7bff19673e50ce6f45daac0a095dcd099a28/ai_edge_litert-2.1.5-cp312-cp312-macosx_12_0_arm64.whl", hash = "sha256:b62fd3d90e643bcc3e3a31885a7636b5662527d48c27154cf07793f26896f018", size = 9711976, upload-time = "2026-05-15T23:34:16.988Z" },
+    { url = "https://files.pythonhosted.org/packages/4a/6f/b43fc56831ecc439a6e6eb0e1bfdffbfe6213e8c706aa421017dce1ac56b/ai_edge_litert-2.1.5-cp312-cp312-manylinux_2_27_aarch64.whl", hash = "sha256:1d282722cdfb70bb42d457f4bfe7789f88187ccadd73fea9f0107dce6e98fe45", size = 12867617, upload-time = "2026-05-15T23:11:22.759Z" },
+    { url = "https://files.pythonhosted.org/packages/c9/20/a76ba29b1c4c3009b5c64f4ec7f5fe5165104fe15481bd79b55927948541/ai_edge_litert-2.1.5-cp312-cp312-manylinux_2_27_x86_64.whl", hash = "sha256:f1c6d8db4382890881baeb8ed13c0802ada022e0b104b0db8fccf31353899ee0", size = 17570644, upload-time = "2026-05-15T23:05:33.664Z" },
+    { url = "https://files.pythonhosted.org/packages/82/fa/5399085daffd9949668d13a83a48db9f69af535ef9f9d06fdf71f0205321/ai_edge_litert-2.1.5-cp312-cp312-win_amd64.whl", hash = "sha256:6d2db6759188b12be9fd095468c3c7069c1bc7c128de78f42f862fb654d247ea", size = 17755006, upload-time = "2026-05-15T23:39:24.555Z" },
+    { url = "https://files.pythonhosted.org/packages/3d/fd/28f24305904954f31ee1a979eea39b670c6a1ab13cf6e5e4fe5f128e9eff/ai_edge_litert-2.1.5-cp313-cp313-macosx_12_0_arm64.whl", hash = "sha256:2af16685a4cc8923d9a89ee5c732b8c66ae2c4d0cb538dbcebba3b93afb662ca", size = 9713185, upload-time = "2026-05-15T23:34:19.431Z" },
+    { url = "https://files.pythonhosted.org/packages/d3/88/e7e32b37f972b4877df788d1ad0995388f823d74dc2743b200bf71a25a53/ai_edge_litert-2.1.5-cp313-cp313-manylinux_2_27_aarch64.whl", hash = "sha256:57506e9e9b91ee04e4cf3e986d184b0c92f1aa9f510c32841835c0d719a7fbb5", size = 12867247, upload-time = "2026-05-15T23:11:24.667Z" },
+    { url = "https://files.pythonhosted.org/packages/7d/c1/5192c360a467dd6e09fa28388022c37bca5d9777e616da40dc5d517186a9/ai_edge_litert-2.1.5-cp313-cp313-manylinux_2_27_x86_64.whl", hash = "sha256:b7825e13454a90e7a4782ecdb6f6d987a2bcc9147aa90eb181193867bf696f24", size = 17570488, upload-time = "2026-05-15T23:05:36.078Z" },
+    { url = "https://files.pythonhosted.org/packages/d5/ba/154599984a8eccbdd14bcd89fabc2e9cbdfcbf537a3c1ab08712c7ce7d02/ai_edge_litert-2.1.5-cp313-cp313-win_amd64.whl", hash = "sha256:602fc90f6baf396df0fe4b0317b35627305c2233beb48db194b79e7e420bafa7", size = 17755085, upload-time = "2026-05-15T23:39:26.901Z" },
+    { url = "https://files.pythonhosted.org/packages/5e/51/34f0ad0def8b15093d602ca6904b129d3ab242ae4711c872190d5c95c010/ai_edge_litert-2.1.5-cp314-cp314-macosx_12_0_arm64.whl", hash = "sha256:597ea79f947452c79ca7e9dd7abfedad6179302851df4a4bb4c755069a2f5ffe", size = 9712496, upload-time = "2026-05-15T23:34:21.36Z" },
+    { url = "https://files.pythonhosted.org/packages/42/43/2b8ef317dca3096372cbf820aa5a3a6c8857dad67f31840a1e17a951e2d3/ai_edge_litert-2.1.5-cp314-cp314-manylinux_2_27_aarch64.whl", hash = "sha256:41d2e8267f047ed14f14a5ff4e0f677a9c5143dd17a36991513f8cc5ef580a3b", size = 12867899, upload-time = "2026-05-15T23:11:26.584Z" },
+    { url = "https://files.pythonhosted.org/packages/c2/d5/9640952de755409c84e09eec5d107675c59fe4f4859391464275eb2c3db6/ai_edge_litert-2.1.5-cp314-cp314-manylinux_2_27_x86_64.whl", hash = "sha256:4fa10d99b2f8647678850684d31075fbb304f50535d5788c2ca93e273ce727a8", size = 17570849, upload-time = "2026-05-15T23:05:37.981Z" },
+    { url = "https://files.pythonhosted.org/packages/0d/d4/0843e5a41bf71eb99ccd1e54714485df527bec19e8c8e679e1395176345d/ai_edge_litert-2.1.5-cp314-cp314-win_amd64.whl", hash = "sha256:14b35558bfce76146046cc2fc647f3fde97146e8b7622ea7fb02e85ac16cd906", size = 18380722, upload-time = "2026-05-15T23:39:29.365Z" },
+]
+
+[[package]]
 name = "aiofiles"
 version = "25.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -57,6 +88,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/f3/af/4182184d3c338792894f34a62672919db7ca008c89abee9b564dd34d8029/astunparse-1.6.3.tar.gz", hash = "sha256:5ad93a8456f0d084c3456d059fd9a92cce667963232cbf763eac3bc5b7940872", size = 18290, upload-time = "2019-12-22T18:12:13.129Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/2b/03/13dde6512ad7b4557eb792fbcf0c653af6076b81e5941d36ec61f7ce6028/astunparse-1.6.3-py2.py3-none-any.whl", hash = "sha256:c2652417f2c8b5bb325c885ae329bdf3f86424075c4fd1a128674bc6fba4b8e8", size = 12732, upload-time = "2019-12-22T18:12:11.297Z" },
+]
+
+[[package]]
+name = "backports-strenum"
+version = "1.3.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/35/c7/2ed54c32fed313591ffb21edbd48db71e68827d43a61938e5a0bc2b6ec91/backports_strenum-1.3.1.tar.gz", hash = "sha256:77c52407342898497714f0596e86188bb7084f89063226f4ba66863482f42414", size = 7257, upload-time = "2023-12-09T14:36:40.937Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d6/50/56cf20e2ee5127b603b81d5a69580a1a325083e2b921aa8f067da83927c0/backports_strenum-1.3.1-py3-none-any.whl", hash = "sha256:cdcfe36dc897e2615dc793b7d3097f54d359918fc448754a517e6f23044ccf83", size = 8304, upload-time = "2023-12-09T14:36:39.905Z" },
 ]
 
 [[package]]
@@ -1037,6 +1077,19 @@ wheels = [
 ]
 
 [[package]]
+name = "onnx-graphsurgeon"
+version = "0.6.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "ml-dtypes" },
+    { name = "numpy" },
+    { name = "onnx" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/35/da/aae4506866bdd18612be95bdd95150714dc14c70ed9d83561b00bc7bd29f/onnx_graphsurgeon-0.6.1-py2.py3-none-any.whl", hash = "sha256:fabc53fc60909dd032cfd889016dd5d4139ab566af4a9039002818f552c73547", size = 59337, upload-time = "2026-04-08T19:29:29.678Z" },
+]
+
+[[package]]
 name = "onnx2tf"
 version = "1.28.8"
 source = { registry = "https://pypi.org/simple" }
@@ -1755,6 +1808,15 @@ wheels = [
 ]
 
 [[package]]
+name = "sng4onnx"
+version = "2.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ff/b2/7ecba71e1639b4e6e17abf52d1f9632c48dd64629e49b9d2524ea6b8ecaa/sng4onnx-2.0.1.tar.gz", hash = "sha256:698269a4315c5e8ae242f5d54df7ecdf1b1b07317b15e0e91257893b473e7409", size = 11630, upload-time = "2026-02-24T12:52:18.815Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b8/51/3811b2e41946dade6f7c79d015b37d6dcbb867bfcb7551ab844b3f88d4bf/sng4onnx-2.0.1-py3-none-any.whl", hash = "sha256:3bcbdaf79c8c4f107a340802f9562620ac5b3c83b3b8e8d08a553276d754168f", size = 11084, upload-time = "2026-02-24T12:52:17.811Z" },
+]
+
+[[package]]
 name = "sympy"
 version = "1.14.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2021,6 +2083,18 @@ wheels = [
 ]
 
 [[package]]
+name = "tqdm"
+version = "4.67.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/09/a9/6ba95a270c6f1fbcd8dac228323f2777d886cb206987444e4bce66338dd4/tqdm-4.67.3.tar.gz", hash = "sha256:7d825f03f89244ef73f1d4ce193cb1774a8179fd96f31d7e1dcde62092b960bb", size = 169598, upload-time = "2026-02-03T17:35:53.048Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/16/e1/3079a9ff9b8e11b846c6ac5c8b5bfb7ff225eee721825310c91b3b50304f/tqdm-4.67.3-py3-none-any.whl", hash = "sha256:ee1e4c0e59148062281c49d80b25b67771a127c85fc9676d3be5f243206826bf", size = 78374, upload-time = "2026-02-03T17:35:50.982Z" },
+]
+
+[[package]]
 name = "treescope"
 version = "0.1.10"
 source = { registry = "https://pypi.org/simple" }
@@ -2236,19 +2310,25 @@ dependencies = [
 
 [package.optional-dependencies]
 export = [
+    { name = "ai-edge-litert" },
+    { name = "onnx-graphsurgeon" },
     { name = "onnx2tf" },
+    { name = "sng4onnx" },
     { name = "tensorflow" },
     { name = "tensorflowjs" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "ai-edge-litert", marker = "extra == 'export'", specifier = ">=2.1.5" },
     { name = "numpy", specifier = ">=2.1.0" },
     { name = "onnx", specifier = ">=1.17.0" },
+    { name = "onnx-graphsurgeon", marker = "extra == 'export'", specifier = ">=0.6.0" },
     { name = "onnx2tf", marker = "extra == 'export'", specifier = ">=1.26.3" },
     { name = "onnxruntime", specifier = ">=1.20.1" },
     { name = "pytest", specifier = ">=8.3.0" },
     { name = "scikit-learn", specifier = ">=1.6.1" },
+    { name = "sng4onnx", marker = "extra == 'export'", specifier = ">=1.0.4" },
     { name = "tensorflow", marker = "extra == 'export'", specifier = ">=2.19.0" },
     { name = "tensorflowjs", marker = "extra == 'export'", specifier = ">=4.22.0" },
     { name = "torch", specifier = ">=2.6.0" },
