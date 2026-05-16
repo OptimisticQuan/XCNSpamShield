@@ -26,6 +26,13 @@ export interface ManualReplyPayload {
   mainPost: MainPostRecord;
   reply: CollectedReply;
   label: SpamLabel;
+  cleanedPinyin?: string;
+  modelConfidence?: number;
+}
+
+export interface ReplyClassificationPayload {
+  threadId: string;
+  replies: CollectedReply[];
 }
 
 export interface ReplyRecord {
@@ -34,7 +41,7 @@ export interface ReplyRecord {
   author: string;
   authorName: string;
   originalText: string;
-  cleanedPinyin: string;
+  cleanedPinyin?: string;
   label: SpamLabel;
   source: LabelSource;
   extractTime: number;
@@ -83,6 +90,7 @@ export interface FloatingCapturePosition {
 
 export interface ExtensionSettings {
   blockingEnabled: boolean;
+  showFloatingCaptureButton: boolean;
   modelThreshold: number;
   updatedAt: number;
   floatingCapturePosition: FloatingCapturePosition;

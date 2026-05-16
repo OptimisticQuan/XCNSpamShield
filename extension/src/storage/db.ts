@@ -100,6 +100,18 @@ export async function setBlockingEnabled(enabled: boolean): Promise<ExtensionSet
   return next;
 }
 
+export async function setShowFloatingCaptureButton(enabled: boolean): Promise<ExtensionSettings> {
+  const current = await getSettings();
+  const next: ExtensionSettings = {
+    ...current,
+    showFloatingCaptureButton: enabled,
+    updatedAt: Date.now(),
+  };
+  const database = await getDatabase();
+  await database.put('settings', { key: SETTINGS_KEY, value: next });
+  return next;
+}
+
 export async function setFloatingCapturePosition(position: ExtensionSettings['floatingCapturePosition']): Promise<ExtensionSettings> {
   const current = await getSettings();
   const next: ExtensionSettings = {
@@ -134,7 +146,7 @@ export async function upsertThreadPayload(
   await transaction.done;
   return {
     savedReplies: uniqueReplies.length,
-    replies: mergedReplies.map((reply) => normalizeReplyRecord(reply)),
+    replies: mergedReplies.map((reply) => sanitizeReplyRecord(reply)),
   };
 }
 
@@ -166,13 +178,13 @@ function mergeMainPostRecord(existing: MainPostRecord | undefined, incoming: Mai
 }
 
 function mergeReply(existing: ReplyRecord | undefined, incoming: ReplyRecord): ReplyRecord {
-  const normalizedIncoming = normalizeReplyRecord(incoming);
+  const normalizedIncoming = sanitizeReplyRecord(incoming);
 
   if (!existing) {
     return normalizedIncoming;
   }
 
-  const normalizedExisting = normalizeReplyRecord(existing);
+  const normalizedExisting = sanitizeReplyRecord(existing);
 
   if (normalizedExisting.source === 'manual' && normalizedIncoming.source === 'auto') {
     return {
@@ -188,12 +200,24 @@ function mergeReply(existing: ReplyRecord | undefined, incoming: ReplyRecord): R
   };
 }
 
-function normalizeReplyRecord(reply: ReplyRecord): ReplyRecord {
+function sanitizeReplyRecord(reply: ReplyRecord): ReplyRecord {
   return {
     ...reply,
     authorName: reply.authorName || reply.author,
-    cleanedPinyin: normalizeReplyToPinyinWords(reply.authorName || reply.author, reply.originalText),
+    cleanedPinyin: reply.cleanedPinyin?.trim() || undefined,
     matchedRules: [],
+  };
+}
+
+function ensureReplyCleanedPinyin(reply: ReplyRecord): ReplyRecord & { cleanedPinyin: string } {
+  const sanitizedReply = sanitizeReplyRecord(reply);
+  if (sanitizedReply.cleanedPinyin) {
+    return sanitizedReply as ReplyRecord & { cleanedPinyin: string };
+  }
+
+  return {
+    ...sanitizedReply,
+    cleanedPinyin: normalizeReplyToPinyinWords(sanitizedReply.authorName || sanitizedReply.author, sanitizedReply.originalText),
   };
 }
 
@@ -203,7 +227,7 @@ export async function listReplies(): Promise<ExtractedReplyView[]> {
 
   return replies
     .sort((left, right) => right.extractTime - left.extractTime)
-    .map((reply) => normalizeReplyRecord(reply))
+    .map((reply) => sanitizeReplyRecord(reply))
     .map((reply) => ({
       replyId: reply.replyId,
       threadId: reply.threadId,
@@ -225,7 +249,7 @@ export async function listThreadGroups(): Promise<ThreadGroupView[]> {
   const groupedReplies = new Map<string, ExtractedReplyView[]>();
 
   for (const reply of replies) {
-    const normalizedReply = normalizeReplyRecord(reply);
+    const normalizedReply = sanitizeReplyRecord(reply);
     const existingReplies = groupedReplies.get(reply.threadId) ?? [];
     existingReplies.push({
       replyId: normalizedReply.replyId,
@@ -259,10 +283,26 @@ export async function listThreadGroups(): Promise<ThreadGroupView[]> {
     .sort((left, right) => right.lastExtractTime - left.lastExtractTime);
 }
 
+export async function getReplyRecords(replyIds: string[]): Promise<ReplyRecord[]> {
+  const uniqueReplyIds = Array.from(new Set(replyIds.filter(Boolean)));
+  if (uniqueReplyIds.length === 0) {
+    return [];
+  }
+
+  const database = await getDatabase();
+  const transaction = database.transaction('replies', 'readonly');
+  const records = await Promise.all(uniqueReplyIds.map((replyId) => transaction.store.get(replyId)));
+  await transaction.done;
+
+  return records
+    .filter((reply): reply is ReplyRecord => Boolean(reply))
+    .map((reply) => sanitizeReplyRecord(reply));
+}
+
 export async function getReplyRecord(replyId: string): Promise<ReplyRecord | null> {
   const database = await getDatabase();
   const reply = await database.get('replies', replyId);
-  return reply ? normalizeReplyRecord(reply) : null;
+  return reply ? sanitizeReplyRecord(reply) : null;
 }
 
 export async function deleteReply(replyId: string): Promise<void> {
@@ -279,7 +319,7 @@ export async function toggleReplyLabel(replyId: string): Promise<ReplyRecord> {
     throw new Error(`Reply ${replyId} was not found.`);
   }
 
-  const normalizedReply = normalizeReplyRecord(reply);
+  const normalizedReply = sanitizeReplyRecord(reply);
   const updated: ReplyRecord = {
     ...normalizedReply,
     label: normalizedReply.label === 1 ? 0 : 1,
@@ -312,7 +352,7 @@ export async function buildExportPayload(): Promise<ExportPayload> {
   }
 
   for (const reply of replies) {
-    const normalizedReply = normalizeReplyRecord(reply);
+    const normalizedReply = ensureReplyCleanedPinyin(reply);
     const existingThread = threadMap.get(reply.threadId) ?? createFallbackThread(reply.threadId);
     existingThread.replies.push({
       reply_id: normalizedReply.replyId,

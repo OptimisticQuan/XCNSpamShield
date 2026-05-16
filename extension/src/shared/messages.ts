@@ -5,6 +5,7 @@ import type {
   ExtractedReplyView,
   FloatingCapturePosition,
   ManualReplyPayload,
+  ReplyClassificationPayload,
   ReplyRecord,
   ThreadGroupView,
 } from '@/shared/types';
@@ -12,6 +13,7 @@ import type {
 export type RuntimeRequest =
   | { type: 'GET_SETTINGS' }
   | { type: 'SET_BLOCKING'; enabled: boolean }
+  | { type: 'SET_SHOW_FLOATING_CAPTURE_BUTTON'; enabled: boolean }
   | { type: 'SET_FLOATING_CAPTURE_POSITION'; position: FloatingCapturePosition }
   | { type: 'LIST_REPLIES' }
   | { type: 'LIST_THREAD_GROUPS' }
@@ -21,13 +23,16 @@ export type RuntimeRequest =
   | { type: 'EXPORT_JSON' }
   | { type: 'EXTRACT_CURRENT_PAGE' }
   | { type: 'CLASSIFY_COLLECTED_THREAD'; payload: CollectedThreadPayload }
+  | { type: 'CLASSIFY_REPLIES'; payload: ReplyClassificationPayload }
   | { type: 'UPSERT_COLLECTED_THREAD'; payload: CollectedThreadPayload }
   | { type: 'UPSERT_MANUAL_REPLY'; payload: ManualReplyPayload }
+  | { type: 'GET_REPLY_RECORDS'; replyIds: string[] }
   | { type: 'GET_REPLY_RECORD'; replyId: string };
 
 export type RuntimeResponseMap = {
   GET_SETTINGS: ExtensionSettings;
   SET_BLOCKING: ExtensionSettings;
+  SET_SHOW_FLOATING_CAPTURE_BUTTON: ExtensionSettings;
   SET_FLOATING_CAPTURE_POSITION: ExtensionSettings;
   LIST_REPLIES: ExtractedReplyView[];
   LIST_THREAD_GROUPS: ThreadGroupView[];
@@ -37,8 +42,10 @@ export type RuntimeResponseMap = {
   EXPORT_JSON: ExportPayload;
   EXTRACT_CURRENT_PAGE: { savedReplies: number };
   CLASSIFY_COLLECTED_THREAD: ReplyRecord[];
+  CLASSIFY_REPLIES: ReplyRecord[];
   UPSERT_COLLECTED_THREAD: { savedReplies: number; replies: ReplyRecord[] };
   UPSERT_MANUAL_REPLY: ReplyRecord;
+  GET_REPLY_RECORDS: ReplyRecord[];
   GET_REPLY_RECORD: ReplyRecord | null;
 };
 

@@ -41,7 +41,7 @@ export function syncCachedReplyDecision(reply: ReplyRecord): void {
     label: reply.label,
     source: reply.source,
     matchedRules: [],
-    cleanedPinyin: reply.cleanedPinyin,
+    cleanedPinyin: reply.cleanedPinyin ?? '',
     modelConfidence: reply.modelConfidence,
   });
 }

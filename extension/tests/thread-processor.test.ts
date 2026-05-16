@@ -21,6 +21,7 @@ import type { CollectedThreadPayload, ExtensionSettings } from '@/shared/types';
 
 const settings: ExtensionSettings = {
   blockingEnabled: true,
+  showFloatingCaptureButton: false,
   modelThreshold: 0.32,
   updatedAt: 1,
   floatingCapturePosition: {

@@ -2,9 +2,9 @@ import '@/content/content.css';
 
 import { clearActionButton, ensureActionButton } from '@/content/actions';
 import { applyCollapsedState, clearCollapsedState } from '@/content/collapser';
-import { buildCollectedThread, collectCurrentThread, toCollectedReply } from '@/content/extractor';
+import { collectCurrentThread, toCollectedReply } from '@/content/extractor';
 import { collectParsedTweets, extractMainTweet, getLoadedTweetArticles, isStatusPage, type ParsedTweet } from '@/content/selectors';
-import { ACTION_BUTTON_CLASS, DEFAULT_SETTINGS, FLOATING_CAPTURE_ROOT_ID, THREAD_SCAN_DEBOUNCE_MS } from '@/shared/constants';
+import { ACTION_BUTTON_CLASS, DEFAULT_SETTINGS, FLOATING_CAPTURE_ROOT_ID, THREAD_SCAN_DEBOUNCE_MS, THREAD_SCROLL_SCAN_DEBOUNCE_MS } from '@/shared/constants';
 import type { ContentRequest, RuntimeRequest } from '@/shared/messages';
 import { isExtensionContextInvalidatedError, sendRuntimeMessage } from '@/shared/messages';
 import type { CollectedThreadPayload, ExtensionSettings, ReplyRecord } from '@/shared/types';
@@ -15,8 +15,11 @@ declare global {
 
 let currentSettings: ExtensionSettings | null = null;
 let scanTimeout: number | undefined;
+let scanFrameHandle: number | undefined;
 const storedReplyMap = new Map<string, ReplyRecord>();
 const transientReplyMap = new Map<string, ReplyRecord>();
+const pendingStoredReplyIds = new Set<string>();
+const pendingInferenceReplyIds = new Set<string>();
 let bootstrapPromise: Promise<void> = Promise.resolve();
 let captureInProgress = false;
 let captureTone: 'idle' | 'loading' | 'success' | 'error' = 'idle';
@@ -26,6 +29,8 @@ let floatingPosition: ExtensionSettings['floatingCapturePosition'] | null = null
 let feedbackTimeout: number | undefined;
 let mutationObserver: MutationObserver | null = null;
 let contentContextActive = true;
+let scanInProgress = false;
+let rerunScanRequested = false;
 
 if (!globalThis.__xspamshieldContentInitialized__) {
   globalThis.__xspamshieldContentInitialized__ = true;
@@ -54,10 +59,7 @@ if (!globalThis.__xspamshieldContentInitialized__) {
 }
 
 async function bootstrap(): Promise<void> {
-  const [settingsResponse, repliesResponse] = await Promise.all([
-    sendContentRuntimeMessage({ type: 'GET_SETTINGS' }),
-    sendContentRuntimeMessage({ type: 'LIST_REPLIES' }),
-  ]);
+  const settingsResponse = await sendContentRuntimeMessage({ type: 'GET_SETTINGS' });
 
   if (!contentContextActive) {
     return;
@@ -65,21 +67,6 @@ async function bootstrap(): Promise<void> {
 
   currentSettings = settingsResponse.data ?? { ...DEFAULT_SETTINGS, updatedAt: Date.now() };
   floatingPosition = currentSettings.floatingCapturePosition;
-
-  for (const reply of repliesResponse.data ?? []) {
-    storedReplyMap.set(reply.replyId, {
-      threadId: reply.threadId,
-      replyId: reply.replyId,
-      author: reply.author,
-      authorName: reply.authorName,
-      originalText: reply.originalText,
-      cleanedPinyin: '',
-      label: reply.label,
-      source: reply.source,
-      extractTime: reply.extractTime,
-      matchedRules: reply.matchedRules,
-    });
-  }
 
   syncFloatingCaptureCard();
   observeMutations();
@@ -98,23 +85,37 @@ async function handleExtraction(sendResponse: (response: CollectedThreadPayload 
 
 function observeMutations(): void {
   mutationObserver = new MutationObserver(() => {
-    if (!contentContextActive) {
-      return;
-    }
-
-    window.clearTimeout(scanTimeout);
-    scanTimeout = window.setTimeout(() => {
-      void runScan();
-    }, THREAD_SCAN_DEBOUNCE_MS);
+    scheduleScan(THREAD_SCAN_DEBOUNCE_MS);
   });
 
   mutationObserver.observe(document.body, {
     childList: true,
     subtree: true,
   });
+
+  document.addEventListener('scroll', handleViewportChange, true);
+  window.addEventListener('resize', handleViewportChange);
 }
 
 async function runScan(): Promise<void> {
+  if (scanInProgress) {
+    rerunScanRequested = true;
+    return;
+  }
+
+  scanInProgress = true;
+
+  try {
+    do {
+      rerunScanRequested = false;
+      await performScan();
+    } while (rerunScanRequested && contentContextActive);
+  } finally {
+    scanInProgress = false;
+  }
+}
+
+async function performScan(): Promise<void> {
   if (!contentContextActive) {
     return;
   }
@@ -128,6 +129,8 @@ async function runScan(): Promise<void> {
   if (!isStatusPage()) {
     activeThreadId = null;
     transientReplyMap.clear();
+    pendingStoredReplyIds.clear();
+    pendingInferenceReplyIds.clear();
     clearInjectedTweetUi();
     return;
   }
@@ -143,15 +146,16 @@ async function runScan(): Promise<void> {
   if (activeThreadId !== mainTweet.tweetId) {
     activeThreadId = mainTweet.tweetId;
     transientReplyMap.clear();
+    pendingStoredReplyIds.clear();
+    pendingInferenceReplyIds.clear();
   }
 
   const allowManualToggle = isStatusPage();
-  const visibleTweets = collectParsedTweets({ visibleOnly: true });
-  const visibleReplies = visibleTweets.filter((tweet) => tweet.tweetId !== mainTweet.tweetId);
+  const visibleReplies = parsedTweets.filter((tweet) => tweet.tweetId !== mainTweet.tweetId && isTweetVisible(tweet.article));
 
   clearActionButton(mainTweet.article);
 
-  await loadTransientReplies(mainTweet, visibleReplies);
+  void warmVisibleReplyDecisions(mainTweet, visibleReplies);
 
   for (const tweet of visibleReplies) {
     const decision = storedReplyMap.get(tweet.tweetId) ?? transientReplyMap.get(tweet.tweetId);
@@ -179,6 +183,32 @@ async function runScan(): Promise<void> {
   }
 }
 
+function scheduleScan(delayMs: number): void {
+  if (!contentContextActive) {
+    return;
+  }
+
+  window.clearTimeout(scanTimeout);
+  scanTimeout = window.setTimeout(() => {
+    scheduleAnimationFrameScan();
+  }, delayMs);
+}
+
+function scheduleAnimationFrameScan(): void {
+  if (!contentContextActive || scanFrameHandle !== undefined) {
+    return;
+  }
+
+  scanFrameHandle = window.requestAnimationFrame(() => {
+    scanFrameHandle = undefined;
+    void runScan();
+  });
+}
+
+function handleViewportChange(): void {
+  scheduleScan(THREAD_SCROLL_SCAN_DEBOUNCE_MS);
+}
+
 function getCollapseReason(decision: ReplyRecord): string {
   if (decision.source === 'manual') {
     return '人工标记';
@@ -191,31 +221,103 @@ function getCollapseReason(decision: ReplyRecord): string {
   return '模型命中';
 }
 
-async function loadTransientReplies(mainTweet: ParsedTweet, replies: ParsedTweet[]): Promise<void> {
+async function warmVisibleReplyDecisions(mainTweet: ParsedTweet, replies: ParsedTweet[]): Promise<void> {
+  const loadedStoredReplies = await loadStoredReplies(replies);
+  const loadedTransientReplies = await loadTransientReplies(mainTweet.tweetId, replies);
+
+  if (loadedStoredReplies || loadedTransientReplies) {
+    void runScan();
+  }
+}
+
+async function loadStoredReplies(replies: ParsedTweet[]): Promise<boolean> {
+  const missingReplyIds = replies
+    .map((tweet) => tweet.tweetId)
+    .filter(
+      (replyId) =>
+        !storedReplyMap.has(replyId)
+        && !transientReplyMap.has(replyId)
+        && !pendingStoredReplyIds.has(replyId)
+        && !pendingInferenceReplyIds.has(replyId),
+    );
+
+  if (missingReplyIds.length === 0) {
+    return false;
+  }
+
+  missingReplyIds.forEach((replyId) => pendingStoredReplyIds.add(replyId));
+
+  try {
+    const response = await sendContentRuntimeMessage({
+      type: 'GET_REPLY_RECORDS',
+      replyIds: missingReplyIds,
+    });
+
+    if (!response.ok) {
+      if (isExtensionContextInvalidatedError(response.error)) {
+        return false;
+      }
+
+      console.error('XSpamShield lookup stored replies failed', response.error);
+      return false;
+    }
+
+    let hasUpdates = false;
+    for (const reply of response.data ?? []) {
+      storedReplyMap.set(reply.replyId, reply);
+      transientReplyMap.delete(reply.replyId);
+      hasUpdates = true;
+    }
+
+    return hasUpdates;
+  } finally {
+    missingReplyIds.forEach((replyId) => pendingStoredReplyIds.delete(replyId));
+  }
+}
+
+async function loadTransientReplies(threadId: string, replies: ParsedTweet[]): Promise<boolean> {
   const missingReplies = replies.filter(
-    (tweet) => !storedReplyMap.has(tweet.tweetId) && !transientReplyMap.has(tweet.tweetId),
+    (tweet) =>
+      !storedReplyMap.has(tweet.tweetId)
+      && !transientReplyMap.has(tweet.tweetId)
+      && !pendingStoredReplyIds.has(tweet.tweetId)
+      && !pendingInferenceReplyIds.has(tweet.tweetId),
   );
 
   if (missingReplies.length === 0) {
-    return;
+    return false;
   }
 
-  const response = await sendContentRuntimeMessage({
-    type: 'CLASSIFY_COLLECTED_THREAD',
-    payload: buildCollectedThread(mainTweet, missingReplies),
-  });
+  const collectedReplies = missingReplies.map(toCollectedReply);
+  collectedReplies.forEach((reply) => pendingInferenceReplyIds.add(reply.replyId));
 
-  if (!response.ok) {
-    if (isExtensionContextInvalidatedError(response.error)) {
-      return;
+  try {
+    const response = await sendContentRuntimeMessage({
+      type: 'CLASSIFY_REPLIES',
+      payload: {
+        threadId,
+        replies: collectedReplies,
+      },
+    });
+
+    if (!response.ok) {
+      if (isExtensionContextInvalidatedError(response.error)) {
+        return false;
+      }
+
+      console.error('XSpamShield classify replies failed', response.error);
+      return false;
     }
 
-    console.error('XSpamShield classify failed', response.error);
-    return;
-  }
+    let hasUpdates = false;
+    for (const reply of response.data ?? []) {
+      transientReplyMap.set(reply.replyId, reply);
+      hasUpdates = true;
+    }
 
-  for (const reply of response.data ?? []) {
-    transientReplyMap.set(reply.replyId, reply);
+    return hasUpdates;
+  } finally {
+    collectedReplies.forEach((reply) => pendingInferenceReplyIds.delete(reply.replyId));
   }
 }
 
@@ -244,6 +346,8 @@ async function toggleReply(mainTweet: ParsedTweet, replyTweet: ParsedTweet, curr
       },
       reply: toCollectedReply(replyTweet),
       label: nextLabel,
+      cleanedPinyin: currentRecord.cleanedPinyin,
+      modelConfidence: currentRecord.modelConfidence,
     },
   });
 
@@ -281,7 +385,7 @@ async function extractAndPersistCurrentThread(): Promise<ReplyRecord[] | null> {
 }
 
 function syncFloatingCaptureCard(): void {
-  if (!isStatusPage()) {
+  if (!isStatusPage() || !currentSettings?.showFloatingCaptureButton) {
     document.getElementById(FLOATING_CAPTURE_ROOT_ID)?.remove();
     return;
   }
@@ -510,14 +614,27 @@ function deactivateContentContext(): void {
 
   contentContextActive = false;
   window.clearTimeout(scanTimeout);
+  if (scanFrameHandle !== undefined) {
+    window.cancelAnimationFrame(scanFrameHandle);
+    scanFrameHandle = undefined;
+  }
   window.clearTimeout(feedbackTimeout);
   mutationObserver?.disconnect();
   mutationObserver = null;
+  document.removeEventListener('scroll', handleViewportChange, true);
+  window.removeEventListener('resize', handleViewportChange);
+  pendingStoredReplyIds.clear();
+  pendingInferenceReplyIds.clear();
   captureInProgress = false;
   captureTone = 'idle';
   captureMessage = '';
   document.getElementById(FLOATING_CAPTURE_ROOT_ID)?.remove();
   clearInjectedTweetUi();
+}
+
+function isTweetVisible(article: HTMLElement): boolean {
+  const rect = article.getBoundingClientRect();
+  return rect.height > 0 && rect.bottom >= 0 && rect.top <= window.innerHeight;
 }
 
 function clearInjectedTweetUi(): void {

@@ -1,10 +1,12 @@
 import { clearCachedReplyDecisions, deleteCachedReplyDecision, syncCachedReplyDecision } from '@/background/reply-decision-cache';
-import { buildManualReplyRecord, evaluateCollectedThread, processCollectedThread } from '@/background/thread-processor';
-import { buildExportPayload, clearAll, deleteReply, getReplyRecord, getSettings, listReplies, listThreadGroups, setBlockingEnabled, setFloatingCapturePosition, toggleReplyLabel, upsertThreadPayload } from '@/storage/db';
+import { buildManualReplyRecord, evaluateCollectedReplies, evaluateCollectedThread, processCollectedThread } from '@/background/thread-processor';
+import { buildExportPayload, clearAll, deleteReply, getReplyRecord, getReplyRecords, getSettings, listReplies, listThreadGroups, setBlockingEnabled, setFloatingCapturePosition, setShowFloatingCaptureButton, toggleReplyLabel, upsertThreadPayload } from '@/storage/db';
 import type { RuntimeRequest, RuntimeResponse } from '@/shared/messages';
 import type { CollectedThreadPayload, ReplyRecord } from '@/shared/types';
+import type { ReplyDecisionTraceContext } from '@/background/thread-processor';
 
 const X_TAB_MATCHERS = ['https://x.com/*', 'https://twitter.com/*'] as const;
+let replyDecisionRequestCounter = 0;
 
 chrome.runtime.onInstalled.addListener(() => {
   void getSettings();
@@ -37,6 +39,11 @@ async function handleRuntimeMessage(message: RuntimeRequest): Promise<RuntimeRes
       await broadcastSettings(settings);
       return success(settings);
     }
+    case 'SET_SHOW_FLOATING_CAPTURE_BUTTON': {
+      const settings = await setShowFloatingCaptureButton(message.enabled);
+      await broadcastSettings(settings);
+      return success(settings);
+    }
     case 'SET_FLOATING_CAPTURE_POSITION': {
       const settings = await setFloatingCapturePosition(message.position);
       await broadcastSettings(settings);
@@ -65,27 +72,55 @@ async function handleRuntimeMessage(message: RuntimeRequest): Promise<RuntimeRes
     }
     case 'EXTRACT_CURRENT_PAGE': {
       const payload = await requestPageExtraction();
-      const result = await upsertCollectedThread(payload);
+      const result = await upsertCollectedThread(payload, 'EXTRACT_CURRENT_PAGE');
       return success({ savedReplies: result.savedReplies });
     }
     case 'CLASSIFY_COLLECTED_THREAD': {
       const settings = await getSettings();
-      return success(await evaluateCollectedThread(message.payload, settings));
+      return success(
+        await runReplyDecisionRequest(
+          'CLASSIFY_COLLECTED_THREAD',
+          message.payload.replies.length,
+          (traceContext) => evaluateCollectedThread(message.payload, settings, traceContext),
+          (replies) => ({ completedReplies: replies.length }),
+        ),
+      );
+    }
+    case 'CLASSIFY_REPLIES': {
+      const settings = await getSettings();
+      return success(
+        await runReplyDecisionRequest(
+          'CLASSIFY_REPLIES',
+          message.payload.replies.length,
+          (traceContext) => evaluateCollectedReplies(message.payload.threadId, message.payload.replies, settings, traceContext),
+          (replies) => ({ completedReplies: replies.length }),
+        ),
+      );
     }
     case 'UPSERT_COLLECTED_THREAD':
-      return success(await upsertCollectedThread(message.payload));
+      return success(await upsertCollectedThread(message.payload, 'UPSERT_COLLECTED_THREAD'));
     case 'UPSERT_MANUAL_REPLY': {
       const settings = await getSettings();
-      const reply = await buildManualReplyRecord(message.payload, settings);
-      const result = await upsertThreadPayload({
-        threadId: message.payload.threadId,
-        mainPost: message.payload.mainPost,
-        replies: [reply],
-      });
-      const storedReply = result.replies[0] ?? reply;
-      syncCachedReplyDecision(storedReply);
-      return success(storedReply);
+      const result = await runReplyDecisionRequest(
+        'UPSERT_MANUAL_REPLY',
+        1,
+        async (traceContext) => {
+          const reply = await buildManualReplyRecord(message.payload, settings, traceContext);
+          const stored = await upsertThreadPayload({
+            threadId: message.payload.threadId,
+            mainPost: message.payload.mainPost,
+            replies: [reply],
+          });
+
+          return stored.replies[0] ?? reply;
+        },
+        (reply) => ({ replyId: reply.replyId, label: reply.label }),
+      );
+      syncCachedReplyDecision(result);
+      return success(result);
     }
+    case 'GET_REPLY_RECORDS':
+      return success(await lookupReplyRecords(message.replyIds));
     case 'GET_REPLY_RECORD':
       return success(await getReplyRecord(message.replyId));
   }
@@ -121,16 +156,48 @@ async function sendPageExtractionRequest(tabId: number): Promise<CollectedThread
   return payload;
 }
 
-async function upsertCollectedThread(payload: CollectedThreadPayload): Promise<{ savedReplies: number; replies: ReplyRecord[] }> {
+async function upsertCollectedThread(
+  payload: CollectedThreadPayload,
+  requestType: 'UPSERT_COLLECTED_THREAD' | 'EXTRACT_CURRENT_PAGE',
+): Promise<{ savedReplies: number; replies: ReplyRecord[] }> {
   const settings = await getSettings();
-  const processed = await processCollectedThread(payload, settings);
-  const result = await upsertThreadPayload(processed);
-  result.replies.forEach((reply) => syncCachedReplyDecision(reply));
+  return runReplyDecisionRequest(
+    requestType,
+    payload.replies.length,
+    async (traceContext) => {
+      const processed = await processCollectedThread(payload, settings, traceContext);
+      const result = await upsertThreadPayload(processed);
+      result.replies.forEach((reply) => syncCachedReplyDecision(reply));
 
-  return {
-    savedReplies: result.savedReplies,
-    replies: result.replies,
-  };
+      return {
+        savedReplies: result.savedReplies,
+        replies: result.replies,
+      };
+    },
+    (result) => ({
+      savedReplies: result.savedReplies,
+      completedReplies: result.replies.length,
+    }),
+  );
+}
+
+async function lookupReplyRecords(replyIds: string[]): Promise<ReplyRecord[]> {
+  const lookupStartedAt = performance.now();
+  const replies = await getReplyRecords(replyIds);
+
+  for (const reply of replies) {
+    if (reply.source === 'manual' || reply.cleanedPinyin) {
+      syncCachedReplyDecision(reply);
+    }
+  }
+
+  console.info('[XSpamShield][reply-record-lookup]', {
+    requestedReplyCount: replyIds.length,
+    matchedReplyCount: replies.length,
+    durationMs: roundDuration(performance.now() - lookupStartedAt),
+  });
+
+  return replies;
 }
 
 function isCollectedThreadPayload(value: unknown): value is CollectedThreadPayload {
@@ -196,4 +263,64 @@ async function broadcastSettings(settings: Awaited<ReturnType<typeof getSettings
       .filter((tab): tab is chrome.tabs.Tab & { id: number } => typeof tab.id === 'number')
       .map((tab) => chrome.tabs.sendMessage(tab.id, { type: 'APPLY_SETTINGS', settings }).catch(() => undefined)),
   );
+}
+
+async function runReplyDecisionRequest<T>(
+  requestType: string,
+  replyCount: number,
+  runner: (traceContext: ReplyDecisionTraceContext) => Promise<T>,
+  summarize?: (result: T) => Record<string, unknown>,
+): Promise<T> {
+  const traceContext = createReplyDecisionTraceContext(requestType, replyCount);
+  logReplyDecisionRequestStart(traceContext);
+
+  try {
+    const result = await runner(traceContext);
+    logReplyDecisionRequestEnd(traceContext, {
+      ok: true,
+      ...summarize?.(result),
+    });
+    return result;
+  } catch (error) {
+    logReplyDecisionRequestEnd(traceContext, {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+    throw error;
+  }
+}
+
+function createReplyDecisionTraceContext(requestType: string, replyCount: number): ReplyDecisionTraceContext {
+  replyDecisionRequestCounter += 1;
+  return {
+    requestId: `${requestType}-${Date.now()}-${replyDecisionRequestCounter}`,
+    requestType,
+    requestStartedAt: performance.now(),
+    replyCount,
+  };
+}
+
+function logReplyDecisionRequestStart(traceContext: ReplyDecisionTraceContext): void {
+  console.info('[XSpamShield][reply-decision-request:start]', {
+    requestId: traceContext.requestId,
+    requestType: traceContext.requestType,
+    replyCount: traceContext.replyCount,
+  });
+}
+
+function logReplyDecisionRequestEnd(
+  traceContext: ReplyDecisionTraceContext,
+  details: Record<string, unknown>,
+): void {
+  console.info('[XSpamShield][reply-decision-request:end]', {
+    requestId: traceContext.requestId,
+    requestType: traceContext.requestType,
+    replyCount: traceContext.replyCount,
+    durationMs: roundDuration(performance.now() - traceContext.requestStartedAt),
+    ...details,
+  });
+}
+
+function roundDuration(value: number): number {
+  return Math.round(value * 100) / 100;
 }

@@ -88,6 +88,11 @@ async function initialize(): Promise<void> {
     const target = event.target;
     if (target instanceof HTMLInputElement && target.matches('[data-action="toggle-blocking"]')) {
       void setBlocking(target.checked);
+      return;
+    }
+
+    if (target instanceof HTMLInputElement && target.matches('[data-action="toggle-capture-button"]')) {
+      void setShowFloatingCaptureButton(target.checked);
     }
   });
 }
@@ -179,13 +184,17 @@ function render(options: { rememberScroll?: boolean } = {}): void {
               <span>拦截</span>
               <input class="toggle" type="checkbox" data-action="toggle-blocking" ${settings?.blockingEnabled ? 'checked' : ''} />
             </label>
+            <label class="toggle-inline">
+              <span>抓取按钮</span>
+              <input class="toggle" type="checkbox" data-action="toggle-capture-button" ${settings?.showFloatingCaptureButton ? 'checked' : ''} />
+            </label>
             ${isStandaloneView ? '' : '<button class="secondary compact-button" data-action="open-standalone">独立页</button>'}
             <button class="primary compact-button" data-action="export">导出</button>
             <button class="danger compact-button" data-action="clear">清空</button>
           </div>
         </div>
         <div class="toolbar-subrow">
-          <span class="meta compact-meta">状态页右下角点击“抓取”即可采集当前主贴回复</span>
+          <span class="meta compact-meta">${settings?.showFloatingCaptureButton ? '状态页右下角已显示抓取按钮' : '抓取按钮默认关闭，可在上方手动开启'}</span>
           <span class="toolbar-message">${escapeHtml(state.message)}</span>
         </div>
       </section>
@@ -243,6 +252,19 @@ async function setBlocking(enabled: boolean): Promise<void> {
     state.message = enabled ? '已切换到主动拦截模式' : '已切换到静默采集模式';
     render();
   }
+}
+
+async function setShowFloatingCaptureButton(enabled: boolean): Promise<void> {
+  const response = await sendRuntimeMessage({ type: 'SET_SHOW_FLOATING_CAPTURE_BUTTON', enabled });
+  if (response.ok && response.data) {
+    state.settings = response.data;
+    state.message = enabled ? '已开启页面抓取按钮' : '已关闭页面抓取按钮';
+    render();
+    return;
+  }
+
+  state.message = response.error ?? '抓取按钮设置失败';
+  render();
 }
 
 async function clearRecords(): Promise<void> {
