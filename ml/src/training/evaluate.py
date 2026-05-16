@@ -13,6 +13,7 @@ from src.training.train import JsonlDataset, evaluate_model
 
 
 def main() -> None:
+    # 评估脚本会复用 checkpoint 内保存的配置，避免手工抄超参数导致推理不一致。
     parser = argparse.ArgumentParser(description='Evaluate a trained TextCNN checkpoint.')
     parser.add_argument('--dataset', required=True, help='Path to dataset.jsonl.')
     parser.add_argument('--checkpoint', required=True, help='Path to the checkpoint file.')
@@ -33,6 +34,7 @@ def main() -> None:
     loader = DataLoader(dataset, batch_size=config['batch_size'])
     metrics = evaluate_model(model, loader, torch.device('cpu'), config['decision_threshold'])
 
+    # 同时导出错分样本，方便后续分析假阳性 / 假阴性来自哪些文本模式。
     misclassified = collect_misclassified(model, rows, config['decision_threshold'])
     output_path = Path(args.output_errors)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -46,6 +48,7 @@ def collect_misclassified(model: PinyinTextCNN, rows: list[dict], threshold: flo
     mistakes: list[dict] = []
     with torch.no_grad():
         for row in rows:
+            # 单条样本评估时依然走完整前向流程，保证与批量评估的模型行为一致。
             input_tensor = torch.tensor([row['input_ids']], dtype=torch.long)
             prediction = float(model(input_tensor).item())
             predicted_label = 1 if prediction >= threshold else 0
@@ -56,7 +59,7 @@ def collect_misclassified(model: PinyinTextCNN, rows: list[dict], threshold: flo
                         'label': row['label'],
                         'predicted_label': predicted_label,
                         'prediction': prediction,
-                        'reply_text': row['reply_text'],
+                        'cleaned_pinyin': row['cleaned_pinyin'],
                         'source': row['source'],
                     }
                 )

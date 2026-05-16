@@ -43,6 +43,7 @@ async function main() {
   }
 
   await fs.access(source);
+  await fs.rm(path.resolve(target), { recursive: true, force: true });
   await copyDirectory(path.resolve(source), path.resolve(target));
   console.log(`Copied TF.js model from ${source} to ${target}`);
 }

@@ -13,5 +13,12 @@ def test_textcnn_forward_probability_shape() -> None:
     assert output.shape == (2,)
 
 
+def test_textcnn_uses_kernel_sizes_2_through_7() -> None:
+    model = PinyinTextCNN(vocab_size=64)
+    assert model.kernel_sizes == (2, 3, 4, 5, 6, 7)
+    assert [conv.kernel_size[0] for conv in model.convs] == [2, 3, 4, 5, 6, 7]
+    assert model.fc.in_features == 32 * 6
+
+
 def test_export_module_exists() -> None:
     assert callable(export_onnx_main)

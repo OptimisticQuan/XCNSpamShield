@@ -162,7 +162,7 @@ async function runScan(): Promise<void> {
     const shouldCollapse = currentSettings.blockingEnabled && decision.label === 1;
 
     if (shouldCollapse) {
-      applyCollapsedState(tweet.article, decision.matchedRules.join(', ') || '规则或模型命中');
+      applyCollapsedState(tweet.article, getCollapseReason(decision));
     } else {
       clearCollapsedState(tweet.article);
     }
@@ -177,6 +177,18 @@ async function runScan(): Promise<void> {
       clearActionButton(tweet.article);
     }
   }
+}
+
+function getCollapseReason(decision: ReplyRecord): string {
+  if (decision.source === 'manual') {
+    return '人工标记';
+  }
+
+  if (typeof decision.modelConfidence === 'number') {
+    return `模型 ${(decision.modelConfidence * 100).toFixed(1)}%`;
+  }
+
+  return '模型命中';
 }
 
 async function loadTransientReplies(mainTweet: ParsedTweet, replies: ParsedTweet[]): Promise<void> {

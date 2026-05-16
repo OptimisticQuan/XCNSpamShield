@@ -92,7 +92,6 @@ export interface SpamDecision {
   label: SpamLabel;
   source: LabelSource;
   matchedRules: string[];
-  score: number;
   cleanedPinyin: string;
   modelConfidence?: number;
 }
@@ -107,6 +106,7 @@ export interface ExtractedReplyView {
   source: LabelSource;
   extractTime: number;
   matchedRules: string[];
+  modelConfidence?: number;
 }
 
 export interface ThreadGroupView {

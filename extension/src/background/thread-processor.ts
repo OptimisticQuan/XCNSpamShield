@@ -1,4 +1,3 @@
-import { detectSpamHeuristics } from '@/ml/heuristics';
 import { predictSpamScore } from '@/ml/model-loader';
 import { normalizeReplyToPinyinWords, tokenizeCleanedPinyin, tokensToIds } from '@/ml/tokenizer';
 import type {
@@ -47,15 +46,15 @@ async function buildReplyRecord(
   reply: CollectedReply,
   settings: ExtensionSettings,
 ): Promise<ReplyRecord> {
-  const replyContext = buildReplyModelContext(reply.authorName, reply.text);
-  const heuristic = detectSpamHeuristics(replyContext.raw);
-  const tokenIds = await tokensToIds(tokenizeCleanedPinyin(replyContext.normalized));
-  const modelScore = heuristic.score >= 3 ? null : await predictSpamScore(tokenIds);
+  const cleanedPinyin = buildReplyModelContext(reply.authorName, reply.text);
+  const tokenIds = await tokensToIds(tokenizeCleanedPinyin(cleanedPinyin));
+  const modelScore = await predictSpamScore(tokenIds);
   const decision: SpamDecision = {
-    ...heuristic,
-    label: heuristic.label === 1 || (modelScore ?? 0) >= settings.modelThreshold ? 1 : 0,
+    label: (modelScore ?? 0) >= settings.modelThreshold ? 1 : 0,
+    source: 'auto',
+    matchedRules: [],
     modelConfidence: modelScore ?? undefined,
-    cleanedPinyin: replyContext.normalized,
+    cleanedPinyin: cleanedPinyin,
   };
 
   return {
@@ -73,10 +72,6 @@ async function buildReplyRecord(
   };
 }
 
-function buildReplyModelContext(authorName: string, replyText: string): { raw: string; normalized: string } {
-  const prefix = authorName.trim();
-  return {
-    raw: prefix ? `${prefix}:${replyText}` : replyText,
-    normalized: normalizeReplyToPinyinWords(authorName, replyText),
-  };
+function buildReplyModelContext(authorName: string, replyText: string): string {
+  return normalizeReplyToPinyinWords(authorName, replyText);
 }

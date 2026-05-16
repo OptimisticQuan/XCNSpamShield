@@ -153,7 +153,7 @@ function render(options: { rememberScroll?: boolean } = {}): void {
               </header>
               <p>${escapeHtml(truncate(getDisplayText(reply.originalText, '内容不可见（可能仅包含零宽字符或未提取到 emoji）'), 140))}</p>
               <div class="reply-card-footer">
-                <div class="meta reply-rule-meta">规则: ${escapeHtml(reply.matchedRules.join(', ') || '无')}</div>
+                <div class="meta reply-rule-meta">${escapeHtml(formatReplyMeta(reply))}</div>
                 <div class="reply-actions">
                   <button class="secondary" data-action="toggle-label" data-reply-id="${reply.replyId}">切换标签</button>
                   <button class="danger" data-action="delete" data-reply-id="${reply.replyId}">删除</button>
@@ -222,6 +222,18 @@ function render(options: { rememberScroll?: boolean } = {}): void {
   `;
 
   restoreScrollPositions();
+}
+
+function formatReplyMeta(reply: ThreadGroupView['replies'][number]): string {
+  if (reply.source === 'manual') {
+    return '人工标记';
+  }
+
+  if (typeof reply.modelConfidence === 'number') {
+    return `模型 ${(reply.modelConfidence * 100).toFixed(1)}%`;
+  }
+
+  return '模型未返回分数';
 }
 
 async function setBlocking(enabled: boolean): Promise<void> {
@@ -297,6 +309,7 @@ function updateReplyInState(updatedReply: ReplyRecord): void {
             source: updatedReply.source,
             extractTime: updatedReply.extractTime,
             matchedRules: updatedReply.matchedRules,
+            modelConfidence: updatedReply.modelConfidence,
           }
         : reply,
     );

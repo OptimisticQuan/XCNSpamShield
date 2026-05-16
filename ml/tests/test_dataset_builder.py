@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from src.preprocessing.dataset_builder import build_dataset_rows, iter_reply_rows
+from src.preprocessing.dataset_builder import HARD_EXAMPLE_AUGMENT_WEIGHT, build_dataset_rows, iter_reply_rows
 
 
 def test_iter_reply_rows_prefers_exported_cleaned_pinyin() -> None:
@@ -91,3 +91,22 @@ def test_build_dataset_rows_merges_all_raw_json_replies(tmp_path: Path) -> None:
     _, rows = build_dataset_rows([raw_dir], vocab_path=tmp_path / 'vocab.txt')
 
     assert [row['reply_id'] for row in rows] == ['reply-a', 'reply-b']
+
+
+def test_build_dataset_rows_applies_hard_example_augmentations(tmp_path: Path) -> None:
+    export_path = tmp_path / 'sample.json'
+    export_path.write_text(
+        '{"data": [{"thread_id": "thread-1", "replies": [{"reply_id": "reply-1", "cleaned_pinyin": ": tui te di yi sao n", "label": 1, "source": "auto"}]}]}',
+        encoding='utf-8',
+    )
+    augmentation_path = tmp_path / 'augmentations.json'
+    augmentation_path.write_text(
+        '[{"reply_id": "reply-1", "variants": [": tui te di yi sao", "tui te di yi sao"]}]',
+        encoding='utf-8',
+    )
+
+    _, rows = build_dataset_rows([export_path], vocab_path=tmp_path / 'vocab.txt', augmentation_path=augmentation_path)
+
+    assert [row['reply_id'] for row in rows] == ['reply-1', 'reply-1#aug1', 'reply-1#aug2']
+    assert rows[1]['cleaned_pinyin'] == ': tui te di yi sao'
+    assert rows[1]['weight'] == HARD_EXAMPLE_AUGMENT_WEIGHT

@@ -67,7 +67,7 @@ export async function getSettings(): Promise<ExtensionSettings> {
   const record = await database.get('settings', SETTINGS_KEY);
 
   if (record) {
-    return {
+    const nextSettings = {
       ...DEFAULT_SETTINGS,
       ...record.value,
       floatingCapturePosition: {
@@ -75,6 +75,13 @@ export async function getSettings(): Promise<ExtensionSettings> {
         ...record.value.floatingCapturePosition,
       },
     };
+
+    if (record.value.modelThreshold === 0.85) {
+      nextSettings.modelThreshold = DEFAULT_SETTINGS.modelThreshold;
+      await database.put('settings', { key: SETTINGS_KEY, value: nextSettings });
+    }
+
+    return nextSettings;
   }
 
   await database.put('settings', { key: SETTINGS_KEY, value: DEFAULT_SETTINGS });
@@ -171,7 +178,6 @@ function mergeReply(existing: ReplyRecord | undefined, incoming: ReplyRecord): R
   return {
     ...normalizedExisting,
     ...normalizedIncoming,
-    matchedRules: normalizedIncoming.matchedRules.length > 0 ? normalizedIncoming.matchedRules : normalizedExisting.matchedRules,
   };
 }
 
@@ -180,6 +186,7 @@ function normalizeReplyRecord(reply: ReplyRecord): ReplyRecord {
     ...reply,
     authorName: reply.authorName || reply.author,
     cleanedPinyin: normalizeReplyToPinyinWords(reply.authorName || reply.author, reply.originalText),
+    matchedRules: [],
   };
 }
 
@@ -200,6 +207,7 @@ export async function listReplies(): Promise<ExtractedReplyView[]> {
       source: reply.source,
       extractTime: reply.extractTime,
       matchedRules: reply.matchedRules,
+      modelConfidence: reply.modelConfidence,
     }));
 }
 
@@ -222,6 +230,7 @@ export async function listThreadGroups(): Promise<ThreadGroupView[]> {
       source: normalizedReply.source,
       extractTime: normalizedReply.extractTime,
       matchedRules: normalizedReply.matchedRules,
+      modelConfidence: normalizedReply.modelConfidence,
     });
     groupedReplies.set(reply.threadId, existingReplies);
   }

@@ -14,7 +14,7 @@ export const FLOATING_CAPTURE_ROOT_ID = 'xspamshield-floating-capture-root';
 export const THREAD_SCAN_DEBOUNCE_MS = 400;
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   blockingEnabled: true,
-  modelThreshold: 0.85,
+  modelThreshold: 0.32,
   updatedAt: Date.now(),
   floatingCapturePosition: {
     xRatio: 1,
