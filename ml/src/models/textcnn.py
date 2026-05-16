@@ -13,14 +13,14 @@ class PinyinTextCNN(nn.Module):
         super().__init__()
         # 给 [PAD] 固定一个全零 embedding，避免填充位参与参数更新。
         self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=PAD_TOKEN_ID)
-        self.kernel_sizes = tuple(range(2, 8))
+        self.kernel_sizes = tuple(range(2, 6))
         self.convs = nn.ModuleList(
             nn.Conv1d(in_channels=embedding_dim, out_channels=num_filters, kernel_size=kernel_size)
             for kernel_size in self.kernel_sizes
         )
         # 在全连接层前做一点 dropout，降低小数据集过拟合风险。
         self.dropout = nn.Dropout(dropout_rate)
-        # 每个卷积核把 max 值和 mean 值相加后只保留一组特征，因此输入维度不再翻倍。
+        # 每个卷积核把 max 值和 mean 值相加后只保留一组特征，因此输入维度等于卷积核个数 * num_filters。
         self.fc = nn.Linear(num_filters * len(self.kernel_sizes), 1)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:

@@ -9,6 +9,7 @@ __pycache__/
 *.pyo
 *.onnx
 *.bin
+!extension/public/tfjs_model/*.bin
 *.pt
 *.ckpt
 coverage/

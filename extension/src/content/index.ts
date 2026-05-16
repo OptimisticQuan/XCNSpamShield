@@ -2,8 +2,9 @@ import '@/content/content.css';
 
 import { clearActionButton, ensureActionButton } from '@/content/actions';
 import { applyCollapsedState, clearCollapsedState } from '@/content/collapser';
+import { cachedReplyResultFromRecord, ReplyResultCache, resolveCachedReplyResult, type CachedReplyResult } from '@/content/reply-result-cache';
 import { collectCurrentThread, toCollectedReply } from '@/content/extractor';
-import { collectParsedTweets, extractMainTweet, getLoadedTweetArticles, isStatusPage, type ParsedTweet } from '@/content/selectors';
+import { collectParsedTweets, getLoadedTweetArticles, isStatusPage, type ParsedTweet } from '@/content/selectors';
 import { ACTION_BUTTON_CLASS, DEFAULT_SETTINGS, FLOATING_CAPTURE_ROOT_ID, THREAD_SCAN_DEBOUNCE_MS, THREAD_SCROLL_SCAN_DEBOUNCE_MS } from '@/shared/constants';
 import type { ContentRequest, RuntimeRequest } from '@/shared/messages';
 import { isExtensionContextInvalidatedError, sendRuntimeMessage } from '@/shared/messages';
@@ -16,8 +17,7 @@ declare global {
 let currentSettings: ExtensionSettings | null = null;
 let scanTimeout: number | undefined;
 let scanFrameHandle: number | undefined;
-const storedReplyMap = new Map<string, ReplyRecord>();
-const transientReplyMap = new Map<string, ReplyRecord>();
+const replyResultCache = new ReplyResultCache();
 const pendingStoredReplyIds = new Set<string>();
 const pendingInferenceReplyIds = new Set<string>();
 let bootstrapPromise: Promise<void> = Promise.resolve();
@@ -50,7 +50,6 @@ if (!globalThis.__xspamshieldContentInitialized__) {
     if (message.type === 'APPLY_SETTINGS') {
       currentSettings = message.settings;
       floatingPosition = message.settings.floatingCapturePosition;
-      transientReplyMap.clear();
       void runScan();
     }
 
@@ -128,37 +127,37 @@ async function performScan(): Promise<void> {
 
   if (!isStatusPage()) {
     activeThreadId = null;
-    transientReplyMap.clear();
     pendingStoredReplyIds.clear();
     pendingInferenceReplyIds.clear();
     clearInjectedTweetUi();
     return;
   }
 
-  const parsedTweets = collectParsedTweets();
-  const mainTweet = extractMainTweet(parsedTweets);
-  if (!mainTweet) {
+  const currentThreadId = getCurrentThreadIdFromLocation();
+  if (!currentThreadId) {
     activeThreadId = null;
-    transientReplyMap.clear();
     return;
   }
 
-  if (activeThreadId !== mainTweet.tweetId) {
-    activeThreadId = mainTweet.tweetId;
-    transientReplyMap.clear();
+  if (activeThreadId !== currentThreadId) {
+    activeThreadId = currentThreadId;
     pendingStoredReplyIds.clear();
     pendingInferenceReplyIds.clear();
   }
 
-  const allowManualToggle = isStatusPage();
-  const visibleReplies = parsedTweets.filter((tweet) => tweet.tweetId !== mainTweet.tweetId && isTweetVisible(tweet.article));
+  const allowManualToggle = true;
+  const visibleTweets = collectParsedTweets({ visibleOnly: true });
+  const visibleMainTweet = visibleTweets.find((tweet) => tweet.tweetId === currentThreadId) ?? null;
+  const visibleReplies = visibleTweets.filter((tweet) => tweet.tweetId !== currentThreadId);
 
-  clearActionButton(mainTweet.article);
+  if (visibleMainTweet) {
+    clearActionButton(visibleMainTweet.article);
+  }
 
-  void warmVisibleReplyDecisions(mainTweet, visibleReplies);
+  void warmVisibleReplyDecisions(currentThreadId, visibleReplies);
 
   for (const tweet of visibleReplies) {
-    const decision = storedReplyMap.get(tweet.tweetId) ?? transientReplyMap.get(tweet.tweetId);
+    const decision = getCachedReplyDecision(tweet.tweetId);
     if (!decision) {
       continue;
     }
@@ -175,7 +174,7 @@ async function performScan(): Promise<void> {
 
     if (allowManualToggle && (!shouldCollapse || isExpandedSpam)) {
       ensureActionButton(tweet.article, { isSpam: decision.label === 1, isManual: decision.source === 'manual' }, () => {
-        void toggleReply(mainTweet, tweet, decision);
+        void toggleReply(tweet, decision);
       });
     } else {
       clearActionButton(tweet.article);
@@ -209,7 +208,7 @@ function handleViewportChange(): void {
   scheduleScan(THREAD_SCROLL_SCAN_DEBOUNCE_MS);
 }
 
-function getCollapseReason(decision: ReplyRecord): string {
+function getCollapseReason(decision: CachedReplyResult): string {
   if (decision.source === 'manual') {
     return '人工标记';
   }
@@ -221,9 +220,9 @@ function getCollapseReason(decision: ReplyRecord): string {
   return '模型命中';
 }
 
-async function warmVisibleReplyDecisions(mainTweet: ParsedTweet, replies: ParsedTweet[]): Promise<void> {
+async function warmVisibleReplyDecisions(threadId: string, replies: ParsedTweet[]): Promise<void> {
   const loadedStoredReplies = await loadStoredReplies(replies);
-  const loadedTransientReplies = await loadTransientReplies(mainTweet.tweetId, replies);
+  const loadedTransientReplies = await loadTransientReplies(threadId, replies);
 
   if (loadedStoredReplies || loadedTransientReplies) {
     void runScan();
@@ -235,8 +234,7 @@ async function loadStoredReplies(replies: ParsedTweet[]): Promise<boolean> {
     .map((tweet) => tweet.tweetId)
     .filter(
       (replyId) =>
-        !storedReplyMap.has(replyId)
-        && !transientReplyMap.has(replyId)
+        !hasCachedReplyDecision(replyId)
         && !pendingStoredReplyIds.has(replyId)
         && !pendingInferenceReplyIds.has(replyId),
     );
@@ -264,8 +262,7 @@ async function loadStoredReplies(replies: ParsedTweet[]): Promise<boolean> {
 
     let hasUpdates = false;
     for (const reply of response.data ?? []) {
-      storedReplyMap.set(reply.replyId, reply);
-      transientReplyMap.delete(reply.replyId);
+      cachePersistedReply(reply);
       hasUpdates = true;
     }
 
@@ -278,8 +275,7 @@ async function loadStoredReplies(replies: ParsedTweet[]): Promise<boolean> {
 async function loadTransientReplies(threadId: string, replies: ParsedTweet[]): Promise<boolean> {
   const missingReplies = replies.filter(
     (tweet) =>
-      !storedReplyMap.has(tweet.tweetId)
-      && !transientReplyMap.has(tweet.tweetId)
+      !hasCachedReplyDecision(tweet.tweetId)
       && !pendingStoredReplyIds.has(tweet.tweetId)
       && !pendingInferenceReplyIds.has(tweet.tweetId),
   );
@@ -311,7 +307,7 @@ async function loadTransientReplies(threadId: string, replies: ParsedTweet[]): P
 
     let hasUpdates = false;
     for (const reply of response.data ?? []) {
-      transientReplyMap.set(reply.replyId, reply);
+      cacheTransientReply(reply);
       hasUpdates = true;
     }
 
@@ -321,39 +317,38 @@ async function loadTransientReplies(threadId: string, replies: ParsedTweet[]): P
   }
 }
 
-async function toggleReply(mainTweet: ParsedTweet, replyTweet: ParsedTweet, currentRecord: ReplyRecord): Promise<void> {
-  const storedReply = storedReplyMap.get(replyTweet.tweetId);
+async function toggleReply(replyTweet: ParsedTweet, currentRecord: CachedReplyResult): Promise<void> {
   const nextLabel = currentRecord.label === 1 ? 0 : 1;
 
-  if (storedReply) {
-    const response = await sendContentRuntimeMessage({ type: 'TOGGLE_REPLY_LABEL', replyId: storedReply.replyId });
+  if (currentRecord.isPersisted) {
+    const response = await sendContentRuntimeMessage({ type: 'TOGGLE_REPLY_LABEL', replyId: replyTweet.tweetId });
     if (response.ok && response.data) {
-      storedReplyMap.set(replyTweet.tweetId, response.data);
-      transientReplyMap.delete(replyTweet.tweetId);
+      cachePersistedReply(response.data);
     }
     await runScan();
     return;
   }
 
+  const currentThread = collectCurrentThread();
+  const fallbackThreadId = activeThreadId ?? getCurrentThreadIdFromLocation() ?? replyTweet.tweetId;
+
   const response = await sendContentRuntimeMessage({
     type: 'UPSERT_MANUAL_REPLY',
     payload: {
-      threadId: mainTweet.tweetId,
-      mainPost: {
-        author: mainTweet.author,
-        text: mainTweet.text,
-        timestamp: mainTweet.timestamp,
+      threadId: currentThread?.threadId ?? fallbackThreadId,
+      mainPost: currentThread?.mainPost ?? {
+        author: 'unknown',
+        text: '',
+        timestamp: Date.now(),
       },
       reply: toCollectedReply(replyTweet),
       label: nextLabel,
-      cleanedPinyin: currentRecord.cleanedPinyin,
       modelConfidence: currentRecord.modelConfidence,
     },
   });
 
   if (response.ok && response.data) {
-    storedReplyMap.set(replyTweet.tweetId, response.data);
-    transientReplyMap.delete(replyTweet.tweetId);
+    cachePersistedReply(response.data);
   }
 
   await runScan();
@@ -377,8 +372,7 @@ async function extractAndPersistCurrentThread(): Promise<ReplyRecord[] | null> {
   }
 
   for (const reply of response.data.replies) {
-    storedReplyMap.set(reply.replyId, reply);
-    transientReplyMap.delete(reply.replyId);
+    cachePersistedReply(reply);
   }
 
   return response.data.replies;
@@ -625,6 +619,7 @@ function deactivateContentContext(): void {
   window.removeEventListener('resize', handleViewportChange);
   pendingStoredReplyIds.clear();
   pendingInferenceReplyIds.clear();
+  replyResultCache.clear();
   captureInProgress = false;
   captureTone = 'idle';
   captureMessage = '';
@@ -632,14 +627,35 @@ function deactivateContentContext(): void {
   clearInjectedTweetUi();
 }
 
-function isTweetVisible(article: HTMLElement): boolean {
-  const rect = article.getBoundingClientRect();
-  return rect.height > 0 && rect.bottom >= 0 && rect.top <= window.innerHeight;
-}
-
 function clearInjectedTweetUi(): void {
   document.querySelectorAll(`.${ACTION_BUTTON_CLASS}`).forEach((button) => button.remove());
   for (const article of getLoadedTweetArticles()) {
     clearCollapsedState(article);
   }
+}
+
+function getCachedReplyDecision(replyId: string): CachedReplyResult | undefined {
+  const cachedDecision = replyResultCache.get(replyId);
+  if (!cachedDecision || !currentSettings) {
+    return cachedDecision;
+  }
+
+  return resolveCachedReplyResult(cachedDecision, currentSettings.modelThreshold);
+}
+
+function hasCachedReplyDecision(replyId: string): boolean {
+  return Boolean(replyResultCache.get(replyId));
+}
+
+function cachePersistedReply(reply: ReplyRecord): void {
+  replyResultCache.set(reply.replyId, cachedReplyResultFromRecord(reply, true));
+}
+
+function cacheTransientReply(reply: ReplyRecord): void {
+  replyResultCache.set(reply.replyId, cachedReplyResultFromRecord(reply, false));
+}
+
+function getCurrentThreadIdFromLocation(): string | null {
+  const match = window.location.pathname.match(/\/status\/(\d+)/u);
+  return match?.[1] ?? null;
 }

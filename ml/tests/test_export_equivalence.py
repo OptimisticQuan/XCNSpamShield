@@ -13,11 +13,11 @@ def test_textcnn_forward_probability_shape() -> None:
     assert output.shape == (2,)
 
 
-def test_textcnn_uses_kernel_sizes_2_through_7() -> None:
+def test_textcnn_uses_kernel_sizes_2_through_5() -> None:
     model = PinyinTextCNN(vocab_size=64)
-    assert model.kernel_sizes == (2, 3, 4, 5, 6, 7)
-    assert [conv.kernel_size[0] for conv in model.convs] == [2, 3, 4, 5, 6, 7]
-    assert model.fc.in_features == 32 * 6
+    assert model.kernel_sizes == (2, 3, 4, 5)
+    assert [conv.kernel_size[0] for conv in model.convs] == [2, 3, 4, 5]
+    assert model.fc.in_features == 32 * 4
     assert model.embedding.padding_idx == 0
 
 

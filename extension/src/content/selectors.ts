@@ -7,6 +7,8 @@ export interface ParsedTweet {
   timestamp: number;
 }
 
+const parsedTweetCache = new WeakMap<HTMLElement, ParsedTweet>();
+
 export function collectParsedTweets(options?: { visibleOnly?: boolean }): ParsedTweet[] {
   const articles = options?.visibleOnly ? getVisibleTweetArticles() : getLoadedTweetArticles();
   const seenTweetIds = new Set<string>();
@@ -37,6 +39,11 @@ export function isStatusPage(): boolean {
 }
 
 export function parseTweetArticle(article: HTMLElement): ParsedTweet | null {
+  const cachedTweet = parsedTweetCache.get(article);
+  if (cachedTweet) {
+    return cachedTweet;
+  }
+
   const statusLink = findStatusLink(article);
   const tweetId = extractTweetId(statusLink?.href ?? '');
 
@@ -49,7 +56,7 @@ export function parseTweetArticle(article: HTMLElement): ParsedTweet | null {
   const timestampValue = queryOwnTweetElement<HTMLTimeElement>(article, 'a > time')?.dateTime
     ?? queryOwnTweetElement<HTMLTimeElement>(article, 'time')?.dateTime;
 
-  return {
+  const parsedTweet = {
     article,
     tweetId,
     author: extractAuthorHandle(article, statusLink) ?? 'unknown',
@@ -57,6 +64,9 @@ export function parseTweetArticle(article: HTMLElement): ParsedTweet | null {
     text: tweetText,
     timestamp: timestampValue ? Date.parse(timestampValue) : Date.now(),
   };
+
+  parsedTweetCache.set(article, parsedTweet);
+  return parsedTweet;
 }
 
 export function getActionBar(article: HTMLElement): HTMLElement | null {
