@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "xspamshield-ml"
+version = "0.1.0"
+description = "Training and export pipeline for the XSpamShield pinyin-level TextCNN model."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=2.1.0",
+  "onnx>=1.17.0",
+  "onnxruntime>=1.20.1",
+  "pypinyin>=0.54.0",
+  "pytest>=8.3.0",
+  "scikit-learn>=1.6.1",
+  "torch>=2.6.0",
+]
+
+[project.optional-dependencies]
+export = [
+  "onnx2tf>=1.26.3",
+  "tensorflow>=2.19.0",
+  "tensorflowjs>=4.22.0",
+]
+
+[project.scripts]
+build-vocab = "src.preprocessing.dataset_builder:build_vocab_cli"
+prepare-dataset = "src.preprocessing.dataset_builder:prepare_dataset_cli"
+train-model = "src.training.train:main"
+evaluate-model = "src.training.evaluate:main"
+export-onnx = "src.export.export_onnx:main"
+convert-tfjs = "src.export.convert_tfjs:main"
+compare-backends = "src.export.compare_backends:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+

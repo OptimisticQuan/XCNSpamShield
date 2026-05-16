@@ -1,0 +1,2 @@
+- pnpm 管理node项目
+- uv 管理python项目

@@ -1,0 +1,252 @@
+.xspamshield-collapse-host-collapsed > article[data-testid='tweet'] {
+  display: none !important;
+}
+
+.xspamshield-collapse-host-expanded {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.xspamshield-collapse-host-expanded > article[data-testid='tweet'] {
+  min-width: 0;
+}
+
+.xspamshield-collapsed div[data-testid='tweetText'] {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+.xspamshield-collapsed > :not(.xspamshield-collapse-banner) {
+  display: none !important;
+}
+
+.xspamshield-collapsed {
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.xspamshield-collapse-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 7px 12px;
+  border: 1px solid rgba(120, 120, 120, 0.22);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(21, 32, 51, 0.05), rgba(21, 32, 51, 0.02));
+  color: rgb(83, 100, 113);
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+  text-align: center;
+}
+
+.xspamshield-collapse-banner[data-state='expanded'] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 12px;
+  max-width: 100%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 196, 0, 0.12), rgba(255, 196, 0, 0.05));
+  white-space: nowrap;
+  overflow: hidden;
+  text-align: center;
+}
+
+.xspamshield-collapse-host-expanded > .xspamshield-collapse-banner {
+  margin-top: 0;
+}
+
+.xspamshield-collapse-banner-status {
+  color: rgb(196, 79, 34);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  flex: 0 0 auto;
+}
+
+.xspamshield-collapse-banner-author {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  flex: 0 1 auto;
+}
+
+.xspamshield-collapse-banner-name {
+  color: rgb(231, 233, 234);
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: min(240px, 40vw);
+}
+
+.xspamshield-collapse-banner-handle {
+  color: rgb(148, 163, 184);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(220px, 36vw);
+}
+
+.xspamshield-collapse-banner-detail {
+  color: rgb(83, 100, 113);
+  font-size: 10px;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.xspamshield-collapse-banner[data-state='collapsed'] .xspamshield-collapse-banner-detail {
+  display: none;
+}
+
+.xspamshield-collapse-banner[data-state='expanded'] .xspamshield-collapse-banner-author {
+  display: none;
+}
+
+.xspamshield-collapse-banner[data-state='expanded'] .xspamshield-collapse-banner-detail {
+  display: none;
+}
+
+.xspamshield-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  margin-left: 6px;
+  padding: 0 8px;
+  border: 1px solid rgba(29, 155, 240, 0.35);
+  border-radius: 999px;
+  background: rgba(29, 155, 240, 0.04);
+  color: rgb(29, 155, 240);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.xspamshield-action-button[data-state='spam'] {
+  border-color: rgba(0, 153, 102, 0.35);
+  color: rgb(0, 153, 102);
+}
+
+#xspamshield-floating-capture-root {
+  position: fixed;
+  right: 16px;
+  bottom: 18px;
+  z-index: 2147483647;
+  display: block;
+  max-width: min(220px, calc(100vw - 24px));
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+#xspamshield-floating-capture-root[data-tone='success'] .xspamshield-floating-capture-message {
+  color: rgb(0, 153, 102);
+}
+
+#xspamshield-floating-capture-root[data-tone='error'] .xspamshield-floating-capture-message {
+  color: rgb(244, 33, 46);
+}
+
+.xspamshield-floating-capture-message {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10px 24px rgba(15, 20, 25, 0.12);
+  color: rgb(83, 100, 113);
+  font-size: 12px;
+  line-height: 1.45;
+  animation: xspamshield-toast-in 180ms ease-out;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.xspamshield-floating-capture-message[hidden] {
+  display: none;
+}
+
+.xspamshield-floating-capture-shell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid rgba(29, 155, 240, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 12px 32px rgba(15, 20, 25, 0.16);
+  backdrop-filter: blur(12px);
+}
+
+.xspamshield-floating-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(21, 32, 51, 0.06);
+  color: rgb(83, 100, 113);
+  cursor: grab;
+  font-size: 14px;
+  touch-action: none;
+}
+
+.xspamshield-floating-drag-handle:active {
+  cursor: grabbing;
+}
+
+.xspamshield-floating-capture-button {
+  min-width: 64px;
+  height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgb(29, 155, 240), rgb(0, 120, 212));
+  color: rgb(255, 255, 255);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.xspamshield-floating-capture-button:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+@keyframes xspamshield-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

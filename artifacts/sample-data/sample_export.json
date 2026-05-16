@@ -1,0 +1,43 @@
+{
+  "export_time": 1715840000000,
+  "total_records": 1,
+  "data": [
+    {
+      "thread_id": "1789543210000",
+      "main_post": {
+        "author": "Avalon--Mark",
+        "text": "这只猫好乖。",
+        "timestamp": 1715830000000
+      },
+      "replies": [
+        {
+          "reply_id": "1789543210123",
+          "author": "bot_user",
+          "original_text": "主页能打✈️ @aybek98",
+          "cleaned_pinyin": "zhu ye neng da ✈️ @ a y b e k 9 8",
+          "label": 1,
+          "source": "auto",
+          "extract_time": 1715835000000
+        },
+        {
+          "reply_id": "1789543210124",
+          "author": "real_user",
+          "original_text": "很可爱的猫咪",
+          "cleaned_pinyin": "hen ke ai de mao mi",
+          "label": 0,
+          "source": "manual",
+          "extract_time": 1715835000000
+        },
+        {
+          "reply_id": "1789543210125",
+          "author": "spam_variant",
+          "original_text": "DD个线下的哥哥😱65vY😮‍",
+          "cleaned_pinyin": "d d ge xian xia de ge ge 😱 6 5 v y 😮",
+          "label": 1,
+          "source": "manual",
+          "extract_time": 1715835200000
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "XSpamShield",
+  "version": "0.1.0",
+  "description": "Block, label, export, and retrain against X/Twitter spam replies.",
+  "permissions": ["storage", "activeTab", "scripting", "downloads"],
+  "host_permissions": ["https://x.com/*", "https://twitter.com/*"],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://x.com/*", "https://twitter.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["tfjs_model/*"],
+      "matches": ["https://x.com/*", "https://twitter.com/*"]
+    }
+  ]
+}
