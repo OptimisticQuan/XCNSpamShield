@@ -1,8 +1,14 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 
 import { normalizeReplyToPinyinWords } from '@/ml/tokenizer';
-import { DB_NAME, DB_VERSION, DEFAULT_SETTINGS, SETTINGS_KEY } from '@/shared/constants';
+import { BLOCKING_OVERVIEW_PAGE_SIZE, DB_NAME, DB_VERSION, DEFAULT_SETTINGS, SETTINGS_KEY } from '@/shared/constants';
 import type {
+  BlockActionLogView,
+  BlockingOverview,
+  BlockLogStatus,
+  BlockQueueAction,
+  BlockQueueItemView,
+  BlockQueueState,
   ExportPayload,
   ExportThread,
   ExtensionSettings,
@@ -23,6 +29,40 @@ interface SettingStoreRecord {
   value: ExtensionSettings;
 }
 
+export interface StoredBlockQueueItem {
+  author: string;
+  authorName: string;
+  action: BlockQueueAction;
+  state: BlockQueueState;
+  queuedAt: number;
+  updatedAt: number;
+  nextRunAt: number;
+  attemptCount: number;
+  spamReplyCount: number;
+  spamReplyIds: string[];
+  lastError?: string;
+}
+
+export interface StoredBlockLogEntry {
+  id?: number;
+  author: string;
+  authorName: string;
+  action: BlockQueueAction;
+  status: BlockLogStatus;
+  createdAt: number;
+  message: string;
+  spamReplyCount: number;
+  errorMessage?: string;
+}
+
+export interface AuthorSpamSummary {
+  author: string;
+  authorName: string;
+  spamReplyCount: number;
+  spamReplyIds: string[];
+  latestSpamExtractTime: number;
+}
+
 interface XSpamShieldDatabase extends DBSchema {
   threads: {
     key: string;
@@ -34,11 +74,28 @@ interface XSpamShieldDatabase extends DBSchema {
     indexes: {
       'by-thread': string;
       'by-extract-time': number;
+      'by-author': string;
     };
   };
   settings: {
     key: string;
     value: SettingStoreRecord;
+  };
+  blockQueue: {
+    key: string;
+    value: StoredBlockQueueItem;
+    indexes: {
+      'by-next-run': number;
+      'by-state-next-run': [BlockQueueState, number];
+    };
+  };
+  blockLogs: {
+    key: number;
+    value: StoredBlockLogEntry;
+    indexes: {
+      'by-created-at': number;
+      'by-author': string;
+    };
   };
 }
 
@@ -47,14 +104,45 @@ let databasePromise: Promise<IDBPDatabase<XSpamShieldDatabase>> | undefined;
 function getDatabase(): Promise<IDBPDatabase<XSpamShieldDatabase>> {
   if (!databasePromise) {
     databasePromise = openDB<XSpamShieldDatabase>(DB_NAME, DB_VERSION, {
-      upgrade(database) {
-        database.createObjectStore('threads', { keyPath: 'threadId' });
+      upgrade(database, oldVersion, _newVersion, transaction) {
+        if (oldVersion < 1) {
+          database.createObjectStore('threads', { keyPath: 'threadId' });
 
-        const replyStore = database.createObjectStore('replies', { keyPath: 'replyId' });
-        replyStore.createIndex('by-thread', 'threadId');
-        replyStore.createIndex('by-extract-time', 'extractTime');
+          const replyStore = database.createObjectStore('replies', { keyPath: 'replyId' });
+          replyStore.createIndex('by-thread', 'threadId');
+          replyStore.createIndex('by-extract-time', 'extractTime');
+          replyStore.createIndex('by-author', 'author');
 
-        database.createObjectStore('settings', { keyPath: 'key' });
+          database.createObjectStore('settings', { keyPath: 'key' });
+
+          const blockQueueStore = database.createObjectStore('blockQueue', { keyPath: 'author' });
+          blockQueueStore.createIndex('by-next-run', 'nextRunAt');
+          blockQueueStore.createIndex('by-state-next-run', ['state', 'nextRunAt']);
+
+          const blockLogStore = database.createObjectStore('blockLogs', { keyPath: 'id', autoIncrement: true });
+          blockLogStore.createIndex('by-created-at', 'createdAt');
+          blockLogStore.createIndex('by-author', 'author');
+          return;
+        }
+
+        if (oldVersion < 2) {
+          const replyStore = transaction.objectStore('replies');
+          if (!replyStore.indexNames.contains('by-author')) {
+            replyStore.createIndex('by-author', 'author');
+          }
+
+          if (!database.objectStoreNames.contains('blockQueue')) {
+            const blockQueueStore = database.createObjectStore('blockQueue', { keyPath: 'author' });
+            blockQueueStore.createIndex('by-next-run', 'nextRunAt');
+            blockQueueStore.createIndex('by-state-next-run', ['state', 'nextRunAt']);
+          }
+
+          if (!database.objectStoreNames.contains('blockLogs')) {
+            const blockLogStore = database.createObjectStore('blockLogs', { keyPath: 'id', autoIncrement: true });
+            blockLogStore.createIndex('by-created-at', 'createdAt');
+            blockLogStore.createIndex('by-author', 'author');
+          }
+        }
       },
     });
   }
@@ -305,6 +393,32 @@ export async function getReplyRecord(replyId: string): Promise<ReplyRecord | nul
   return reply ? sanitizeReplyRecord(reply) : null;
 }
 
+export async function getAuthorSpamSummary(author: string): Promise<AuthorSpamSummary | null> {
+  if (!author || author === 'unknown') {
+    return null;
+  }
+
+  const database = await getDatabase();
+  const replies = await database.getAllFromIndex('replies', 'by-author', author);
+  const spamReplies = replies
+    .map((reply) => sanitizeReplyRecord(reply))
+    .filter((reply) => reply.label === 1);
+
+  if (spamReplies.length === 0) {
+    return null;
+  }
+
+  const latestSpamReply = [...spamReplies].sort((left, right) => right.extractTime - left.extractTime)[0];
+
+  return {
+    author,
+    authorName: latestSpamReply?.authorName ?? author,
+    spamReplyCount: spamReplies.length,
+    spamReplyIds: spamReplies.map((reply) => reply.replyId),
+    latestSpamExtractTime: latestSpamReply?.extractTime ?? 0,
+  };
+}
+
 export async function deleteReply(replyId: string): Promise<void> {
   const database = await getDatabase();
   await database.delete('replies', replyId);
@@ -332,10 +446,92 @@ export async function toggleReplyLabel(replyId: string): Promise<ReplyRecord> {
 
 export async function clearAll(): Promise<void> {
   const database = await getDatabase();
-  const transaction = database.transaction(['threads', 'replies'], 'readwrite');
+  const transaction = database.transaction(['threads', 'replies', 'blockQueue', 'blockLogs'], 'readwrite');
   await transaction.objectStore('threads').clear();
   await transaction.objectStore('replies').clear();
+  await transaction.objectStore('blockQueue').clear();
+  await transaction.objectStore('blockLogs').clear();
   await transaction.done;
+}
+
+export async function getBlockQueueItem(author: string): Promise<StoredBlockQueueItem | null> {
+  const database = await getDatabase();
+  return (await database.get('blockQueue', author)) ?? null;
+}
+
+export async function putBlockQueueItem(item: StoredBlockQueueItem): Promise<StoredBlockQueueItem> {
+  const database = await getDatabase();
+  await database.put('blockQueue', item);
+  return item;
+}
+
+export async function deleteBlockQueueItem(author: string): Promise<void> {
+  const database = await getDatabase();
+  await database.delete('blockQueue', author);
+}
+
+export async function listBlockQueueItems(): Promise<StoredBlockQueueItem[]> {
+  const database = await getDatabase();
+  const items = await database.getAll('blockQueue');
+  return items.sort((left, right) => left.nextRunAt - right.nextRunAt || left.queuedAt - right.queuedAt);
+}
+
+export async function getNextBlockQueueRunAt(): Promise<number | null> {
+  const items = await listBlockQueueItems();
+  return items[0]?.nextRunAt ?? null;
+}
+
+export async function addBlockLog(entry: StoredBlockLogEntry): Promise<StoredBlockLogEntry> {
+  const database = await getDatabase();
+  const id = await database.add('blockLogs', entry);
+  return {
+    ...entry,
+    id,
+  };
+}
+
+export async function getLatestSuccessfulBlockLog(author: string): Promise<StoredBlockLogEntry | null> {
+  const database = await getDatabase();
+  const entries = await database.getAllFromIndex('blockLogs', 'by-author', author);
+  const latestEntry = entries
+    .filter((entry) => entry.status === 'success')
+    .sort((left, right) => right.createdAt - left.createdAt)[0];
+
+  return latestEntry ?? null;
+}
+
+export async function listBlockingOverview(
+  queuePage: number = 1,
+  logPage: number = 1,
+  pageSize: number = BLOCKING_OVERVIEW_PAGE_SIZE,
+  isProcessing: boolean = false,
+  nextRunAt: number | null = null,
+): Promise<BlockingOverview> {
+  const [queueItems, logEntries] = await Promise.all([listBlockQueueItems(), listBlockLogEntries()]);
+  const normalizedPageSize = Math.max(1, pageSize);
+  const latestSuccessfulByAuthor = new Map<string, StoredBlockLogEntry>();
+
+  for (const entry of logEntries) {
+    if (entry.status !== 'success' || latestSuccessfulByAuthor.has(entry.author)) {
+      continue;
+    }
+    latestSuccessfulByAuthor.set(entry.author, entry);
+  }
+
+  return {
+    queue: paginateItems(
+      queueItems.map(toBlockQueueItemView),
+      queuePage,
+      normalizedPageSize,
+    ),
+    logs: paginateItems(
+      logEntries.map((entry) => toBlockActionLogView(entry, latestSuccessfulByAuthor.get(entry.author))),
+      logPage,
+      normalizedPageSize,
+    ),
+    isProcessing,
+    nextRunAt,
+  };
 }
 
 export async function buildExportPayload(): Promise<ExportPayload> {
@@ -387,4 +583,71 @@ function createFallbackThread(threadId: string): ExportThread {
     } satisfies MainPostRecord,
     replies: [],
   };
+}
+
+async function listBlockLogEntries(): Promise<StoredBlockLogEntry[]> {
+  const database = await getDatabase();
+  const entries = await database.getAllFromIndex('blockLogs', 'by-created-at');
+  return entries.sort((left, right) => right.createdAt - left.createdAt);
+}
+
+function toBlockQueueItemView(item: StoredBlockQueueItem): BlockQueueItemView {
+  return {
+    author: item.author,
+    authorName: item.authorName,
+    action: item.action,
+    state: item.state,
+    queuedAt: item.queuedAt,
+    nextRunAt: item.nextRunAt,
+    attemptCount: item.attemptCount,
+    spamReplyCount: item.spamReplyCount,
+    lastError: item.lastError,
+    profileUrl: buildProfileUrl(item.author),
+  };
+}
+
+function toBlockActionLogView(
+  entry: StoredBlockLogEntry,
+  latestSuccessfulEntry: StoredBlockLogEntry | undefined,
+): BlockActionLogView {
+  const canUndo = Boolean(
+    entry.action === 'block'
+    && entry.status === 'success'
+    && latestSuccessfulEntry
+    && latestSuccessfulEntry.id === entry.id
+    && latestSuccessfulEntry.action === 'block',
+  );
+
+  return {
+    id: entry.id ?? 0,
+    author: entry.author,
+    authorName: entry.authorName,
+    action: entry.action,
+    status: entry.status,
+    createdAt: entry.createdAt,
+    message: entry.message,
+    spamReplyCount: entry.spamReplyCount,
+    errorMessage: entry.errorMessage,
+    canUndo,
+    profileUrl: buildProfileUrl(entry.author),
+  };
+}
+
+function paginateItems<T>(items: T[], page: number, pageSize: number): { items: T[]; page: number; pageSize: number; total: number; totalPages: number } {
+  const total = items.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const start = (safePage - 1) * pageSize;
+
+  return {
+    items: items.slice(start, start + pageSize),
+    page: safePage,
+    pageSize,
+    total,
+    totalPages,
+  };
+}
+
+function buildProfileUrl(author: string): string {
+  return `https://x.com/${author}`;
 }

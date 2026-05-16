@@ -3,7 +3,7 @@
   "name": "XSpamShield",
   "version": "0.1.0",
   "description": "Block, label, export, and retrain against X/Twitter spam replies.",
-  "permissions": ["storage", "activeTab", "scripting", "downloads"],
+  "permissions": ["storage", "activeTab", "scripting", "downloads", "alarms", "cookies"],
   "host_permissions": ["https://x.com/*", "https://twitter.com/*"],
   "action": {
     "default_popup": "popup.html"

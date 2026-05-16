@@ -3,7 +3,7 @@ import pinyinSyllables from '@/ml/pinyin-syllables.json';
 
 export const EXTENSION_NAME = 'XSpamShield';
 export const DB_NAME = 'xspamshield-db';
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 export const SETTINGS_KEY = 'extension-settings';
 export const MAX_SEQUENCE_LENGTH = 30;
 export const COLLAPSED_CLASS = 'xspamshield-collapsed';
@@ -13,6 +13,11 @@ export const PLACEHOLDER_BANNER_CLASS = 'xspamshield-collapse-banner';
 export const FLOATING_CAPTURE_ROOT_ID = 'xspamshield-floating-capture-root';
 export const THREAD_SCAN_DEBOUNCE_MS = 120;
 export const THREAD_SCROLL_SCAN_DEBOUNCE_MS = 80;
+export const AUTO_BLOCK_MIN_SPAM_REPLIES = 3;
+export const BLOCK_QUEUE_DELAY_MS = 10_000;
+export const BLOCK_QUEUE_RETRY_DELAY_MS = 60_000;
+export const BLOCKING_OVERVIEW_PAGE_SIZE = 4;
+export const BLOCK_QUEUE_ALARM_NAME = 'xspamshield-block-queue';
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   blockingEnabled: true,
   showFloatingCaptureButton: false,

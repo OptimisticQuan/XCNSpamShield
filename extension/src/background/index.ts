@@ -1,3 +1,10 @@
+import {
+  cancelBlockQueueAuthor,
+  getBlockingOverviewData,
+  initializeBlockQueueProcessing,
+  queueUnblockAuthor,
+  refreshAutoBlockQueueForAuthors,
+} from '@/background/block-queue';
 import { clearCachedReplyDecisions, deleteCachedReplyDecision, syncCachedReplyDecision } from '@/background/reply-decision-cache';
 import { buildManualReplyRecord, evaluateCollectedReplies, evaluateCollectedThread, processCollectedThread } from '@/background/thread-processor';
 import { buildExportPayload, clearAll, deleteReply, getReplyRecord, getReplyRecords, getSettings, listReplies, listThreadGroups, setBlockingEnabled, setFloatingCapturePosition, setShowFloatingCaptureButton, toggleReplyLabel, upsertThreadPayload } from '@/storage/db';
@@ -10,12 +17,16 @@ let replyDecisionRequestCounter = 0;
 
 chrome.runtime.onInstalled.addListener(() => {
   void getSettings();
+  initializeBlockQueueProcessing();
   void ensureContentScriptsOnMatchingTabs();
 });
 
 chrome.runtime.onStartup.addListener(() => {
+  initializeBlockQueueProcessing();
   void ensureContentScriptsOnMatchingTabs();
 });
+
+initializeBlockQueueProcessing();
 
 chrome.runtime.onMessage.addListener((message: RuntimeRequest, _sender, sendResponse) => {
   void handleRuntimeMessage(message)
@@ -34,6 +45,8 @@ async function handleRuntimeMessage(message: RuntimeRequest): Promise<RuntimeRes
   switch (message.type) {
     case 'GET_SETTINGS':
       return success(await getSettings());
+    case 'GET_BLOCKING_OVERVIEW':
+      return success(await getBlockingOverviewData(message.queuePage, message.logPage, message.pageSize));
     case 'SET_BLOCKING': {
       const settings = await setBlockingEnabled(message.enabled);
       await broadcastSettings(settings);
@@ -54,17 +67,25 @@ async function handleRuntimeMessage(message: RuntimeRequest): Promise<RuntimeRes
     case 'LIST_THREAD_GROUPS':
       return success(await listThreadGroups());
     case 'DELETE_REPLY':
+    {
+      const reply = await getReplyRecord(message.replyId);
       await deleteReply(message.replyId);
       deleteCachedReplyDecision(message.replyId);
+      if (reply) {
+        await refreshAutoBlockQueueForAuthors([reply.author]);
+      }
       return success({ replyId: message.replyId });
+    }
     case 'TOGGLE_REPLY_LABEL': {
       const reply = await toggleReplyLabel(message.replyId);
       syncCachedReplyDecision(reply);
+      await refreshAutoBlockQueueForAuthors([reply.author]);
       return success(reply);
     }
     case 'CLEAR_ALL':
       await clearAll();
       clearCachedReplyDecisions();
+      initializeBlockQueueProcessing();
       return success({ cleared: true as const });
     case 'EXPORT_JSON': {
       const payload = await buildExportPayload();
@@ -123,6 +144,14 @@ async function handleRuntimeMessage(message: RuntimeRequest): Promise<RuntimeRes
       return success(await lookupReplyRecords(message.replyIds));
     case 'GET_REPLY_RECORD':
       return success(await getReplyRecord(message.replyId));
+    case 'CANCEL_BLOCK_QUEUE_AUTHOR': {
+      const cancelled = await cancelBlockQueueAuthor(message.author);
+      return success({ author: message.author, cancelled });
+    }
+    case 'QUEUE_UNBLOCK_AUTHOR': {
+      const result = await queueUnblockAuthor(message.author);
+      return success({ author: message.author, ...result });
+    }
   }
 }
 
@@ -168,6 +197,7 @@ async function upsertCollectedThread(
       const processed = await processCollectedThread(payload, settings, traceContext);
       const result = await upsertThreadPayload(processed);
       result.replies.forEach((reply) => syncCachedReplyDecision(reply));
+      await refreshAutoBlockQueueForAuthors(result.replies.map((reply) => reply.author));
 
       return {
         savedReplies: result.savedReplies,

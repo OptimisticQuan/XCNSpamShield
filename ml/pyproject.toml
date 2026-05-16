@@ -32,6 +32,9 @@ evaluate-model = "src.training.evaluate:main"
 export-onnx = "src.export.export_onnx:main"
 convert-tfjs = "src.export.convert_tfjs:main"
 compare-backends = "src.export.compare_backends:main"
+train-eval-export = "src.workflow.pipeline:train_eval_export_main"
+train-eval = "src.workflow.pipeline:train_eval_main"
+export-deploy = "src.workflow.pipeline:export_deploy_main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]

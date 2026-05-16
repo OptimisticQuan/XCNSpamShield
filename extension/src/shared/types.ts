@@ -1,5 +1,8 @@
 export type SpamLabel = 0 | 1;
 export type LabelSource = 'auto' | 'manual';
+export type BlockQueueAction = 'block' | 'unblock';
+export type BlockQueueState = 'queued' | 'processing' | 'failed';
+export type BlockLogStatus = 'success' | 'failed' | 'cancelled';
 
 export interface MainPostRecord {
   author: string;
@@ -124,4 +127,46 @@ export interface ThreadGroupView {
   replyCount: number;
   spamCount: number;
   lastExtractTime: number;
+}
+
+export interface BlockQueueItemView {
+  author: string;
+  authorName: string;
+  action: BlockQueueAction;
+  state: BlockQueueState;
+  queuedAt: number;
+  nextRunAt: number;
+  attemptCount: number;
+  spamReplyCount: number;
+  lastError?: string;
+  profileUrl: string;
+}
+
+export interface BlockActionLogView {
+  id: number;
+  author: string;
+  authorName: string;
+  action: BlockQueueAction;
+  status: BlockLogStatus;
+  createdAt: number;
+  message: string;
+  spamReplyCount: number;
+  errorMessage?: string;
+  canUndo: boolean;
+  profileUrl: string;
+}
+
+export interface PagedResult<T> {
+  items: T[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface BlockingOverview {
+  queue: PagedResult<BlockQueueItemView>;
+  logs: PagedResult<BlockActionLogView>;
+  isProcessing: boolean;
+  nextRunAt: number | null;
 }
