@@ -1,3 +1,4 @@
+import { getCachedReplyDecision, setCachedReplyDecision } from '@/background/reply-decision-cache';
 import { predictSpamScore } from '@/ml/model-loader';
 import { normalizeReplyToPinyinWords, tokenizeCleanedPinyin, tokensToIds } from '@/ml/tokenizer';
 import type {
@@ -46,16 +47,7 @@ async function buildReplyRecord(
   reply: CollectedReply,
   settings: ExtensionSettings,
 ): Promise<ReplyRecord> {
-  const cleanedPinyin = buildReplyModelContext(reply.authorName, reply.text);
-  const tokenIds = await tokensToIds(tokenizeCleanedPinyin(cleanedPinyin));
-  const modelScore = await predictSpamScore(tokenIds);
-  const decision: SpamDecision = {
-    label: (modelScore ?? 0) >= settings.modelThreshold ? 1 : 0,
-    source: 'auto',
-    matchedRules: [],
-    modelConfidence: modelScore ?? undefined,
-    cleanedPinyin: cleanedPinyin,
-  };
+  const decision = await buildReplyDecision(reply, settings.modelThreshold);
 
   return {
     threadId,
@@ -69,6 +61,42 @@ async function buildReplyRecord(
     extractTime: Date.now(),
     matchedRules: decision.matchedRules,
     modelConfidence: decision.modelConfidence,
+  };
+}
+
+async function buildReplyDecision(reply: CollectedReply, modelThreshold: number): Promise<SpamDecision> {
+  const cachedDecision = getCachedReplyDecision(reply.replyId);
+  if (cachedDecision) {
+    return resolveCachedDecision(cachedDecision, modelThreshold);
+  }
+
+  const cleanedPinyin = buildReplyModelContext(reply.authorName, reply.text);
+  const tokenIds = await tokensToIds(tokenizeCleanedPinyin(cleanedPinyin));
+  const modelScore = await predictSpamScore(tokenIds);
+  const decision = buildAutoDecision(cleanedPinyin, modelScore, modelThreshold);
+
+  setCachedReplyDecision(reply.replyId, decision);
+  return decision;
+}
+
+function resolveCachedDecision(cachedDecision: SpamDecision, modelThreshold: number): SpamDecision {
+  if (cachedDecision.source === 'manual') {
+    return {
+      ...cachedDecision,
+      matchedRules: [],
+    };
+  }
+
+  return buildAutoDecision(cachedDecision.cleanedPinyin, cachedDecision.modelConfidence ?? null, modelThreshold);
+}
+
+function buildAutoDecision(cleanedPinyin: string, modelScore: number | null, modelThreshold: number): SpamDecision {
+  return {
+    label: (modelScore ?? 0) >= modelThreshold ? 1 : 0,
+    source: 'auto',
+    matchedRules: [],
+    modelConfidence: modelScore ?? undefined,
+    cleanedPinyin,
   };
 }
 

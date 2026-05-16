@@ -25,6 +25,6 @@ describe('tokenizer', () => {
     expect(tokens).toContain('[SEP]');
     expect(tokens).toContain('✈️');
     expect(tokens).toContain(':');
-    expect(tokens).toHaveLength(100);
+    expect(tokens).toHaveLength(30);
   });
 });

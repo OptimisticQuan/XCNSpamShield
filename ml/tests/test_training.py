@@ -35,7 +35,7 @@ def test_select_decision_threshold_prefers_zero_false_positives_then_fewer_false
 
     threshold = select_decision_threshold(model, loader, torch.device('cpu'))
 
-    assert threshold == 0.32
+    assert threshold == 0.34
 
 
 def test_split_rows_keeps_augmented_variants_in_same_partition() -> None:

@@ -76,7 +76,7 @@ export async function getSettings(): Promise<ExtensionSettings> {
       },
     };
 
-    if (record.value.modelThreshold === 0.85) {
+    if (record.value.modelThreshold === 0.85 || record.value.modelThreshold === 0.32) {
       nextSettings.modelThreshold = DEFAULT_SETTINGS.modelThreshold;
       await database.put('settings', { key: SETTINGS_KEY, value: nextSettings });
     }
@@ -112,11 +112,14 @@ export async function setFloatingCapturePosition(position: ExtensionSettings['fl
   return next;
 }
 
-export async function upsertThreadPayload(payload: ExtractedThreadPayload): Promise<number> {
+export async function upsertThreadPayload(
+  payload: ExtractedThreadPayload,
+): Promise<{ savedReplies: number; replies: ReplyRecord[] }> {
   const database = await getDatabase();
   const transaction = database.transaction(['threads', 'replies'], 'readwrite');
   const uniqueReplies = dedupeReplies(payload.replies);
   const existingThread = await transaction.objectStore('threads').get(payload.threadId);
+  const mergedReplies: ReplyRecord[] = [];
 
   const threadRecord = mergeThreadRecord(existingThread, payload);
   await transaction.objectStore('threads').put(threadRecord);
@@ -125,10 +128,14 @@ export async function upsertThreadPayload(payload: ExtractedThreadPayload): Prom
     const existing = await transaction.objectStore('replies').get(reply.replyId);
     const nextReply = mergeReply(existing, reply);
     await transaction.objectStore('replies').put(nextReply);
+    mergedReplies.push(nextReply);
   }
 
   await transaction.done;
-  return uniqueReplies.length;
+  return {
+    savedReplies: uniqueReplies.length,
+    replies: mergedReplies.map((reply) => normalizeReplyRecord(reply)),
+  };
 }
 
 function dedupeReplies(replies: ReplyRecord[]): ReplyRecord[] {

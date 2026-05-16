@@ -27,6 +27,7 @@ def main() -> None:
         vocab_size=checkpoint['vocab_size'],
         embedding_dim=config['embedding_dim'],
         num_filters=config['num_filters'],
+        dropout_rate=config.get('dropout_rate', 0.2),
     )
     model.load_state_dict(checkpoint['state_dict'])
 

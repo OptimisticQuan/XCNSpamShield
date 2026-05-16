@@ -1,3 +1,4 @@
+import { clearCachedReplyDecisions, deleteCachedReplyDecision, syncCachedReplyDecision } from '@/background/reply-decision-cache';
 import { buildManualReplyRecord, evaluateCollectedThread, processCollectedThread } from '@/background/thread-processor';
 import { buildExportPayload, clearAll, deleteReply, getReplyRecord, getSettings, listReplies, listThreadGroups, setBlockingEnabled, setFloatingCapturePosition, toggleReplyLabel, upsertThreadPayload } from '@/storage/db';
 import type { RuntimeRequest, RuntimeResponse } from '@/shared/messages';
@@ -47,11 +48,16 @@ async function handleRuntimeMessage(message: RuntimeRequest): Promise<RuntimeRes
       return success(await listThreadGroups());
     case 'DELETE_REPLY':
       await deleteReply(message.replyId);
+      deleteCachedReplyDecision(message.replyId);
       return success({ replyId: message.replyId });
-    case 'TOGGLE_REPLY_LABEL':
-      return success(await toggleReplyLabel(message.replyId));
+    case 'TOGGLE_REPLY_LABEL': {
+      const reply = await toggleReplyLabel(message.replyId);
+      syncCachedReplyDecision(reply);
+      return success(reply);
+    }
     case 'CLEAR_ALL':
       await clearAll();
+      clearCachedReplyDecisions();
       return success({ cleared: true as const });
     case 'EXPORT_JSON': {
       const payload = await buildExportPayload();
@@ -71,12 +77,14 @@ async function handleRuntimeMessage(message: RuntimeRequest): Promise<RuntimeRes
     case 'UPSERT_MANUAL_REPLY': {
       const settings = await getSettings();
       const reply = await buildManualReplyRecord(message.payload, settings);
-      await upsertThreadPayload({
+      const result = await upsertThreadPayload({
         threadId: message.payload.threadId,
         mainPost: message.payload.mainPost,
         replies: [reply],
       });
-      return success(reply);
+      const storedReply = result.replies[0] ?? reply;
+      syncCachedReplyDecision(storedReply);
+      return success(storedReply);
     }
     case 'GET_REPLY_RECORD':
       return success(await getReplyRecord(message.replyId));
@@ -116,9 +124,12 @@ async function sendPageExtractionRequest(tabId: number): Promise<CollectedThread
 async function upsertCollectedThread(payload: CollectedThreadPayload): Promise<{ savedReplies: number; replies: ReplyRecord[] }> {
   const settings = await getSettings();
   const processed = await processCollectedThread(payload, settings);
+  const result = await upsertThreadPayload(processed);
+  result.replies.forEach((reply) => syncCachedReplyDecision(reply));
+
   return {
-    savedReplies: await upsertThreadPayload(processed),
-    replies: processed.replies,
+    savedReplies: result.savedReplies,
+    replies: result.replies,
   };
 }
 

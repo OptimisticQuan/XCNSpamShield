@@ -42,6 +42,8 @@ def main() -> None:
     parser.add_argument('--epochs', type=int, default=8, help='Number of training epochs.')
     parser.add_argument('--batch-size', type=int, default=16, help='Batch size.')
     parser.add_argument('--learning-rate', type=float, default=1e-3, help='Learning rate.')
+    parser.add_argument('--dropout-rate', type=float, default=0.2, help='Dropout rate before the classifier head.')
+    parser.add_argument('--weight-decay', type=float, default=1e-4, help='AdamW weight decay.')
     parser.add_argument('--positive-class-weight', type=float, default=1.25, help='Extra multiplier for spam samples.')
     parser.add_argument('--negative-class-weight', type=float, default=1.0, help='Extra multiplier for ham samples.')
     parser.add_argument('--train-on-all', action='store_true', help='Train on all rows after the architecture is decided. Metrics are no longer holdout metrics.')
@@ -51,6 +53,8 @@ def main() -> None:
         epochs=args.epochs,
         batch_size=args.batch_size,
         learning_rate=args.learning_rate,
+        dropout_rate=args.dropout_rate,
+        weight_decay=args.weight_decay,
         positive_class_weight=args.positive_class_weight,
         negative_class_weight=args.negative_class_weight,
     )
@@ -71,9 +75,14 @@ def main() -> None:
     # vocab 是从数据集中编码出来的，因此最大 token id + 1 就是 embedding 词表大小。
     vocab_size = max(max(row['input_ids']) for row in rows) + 1
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = PinyinTextCNN(vocab_size=vocab_size, embedding_dim=config.embedding_dim, num_filters=config.num_filters).to(device)
+    model = PinyinTextCNN(
+        vocab_size=vocab_size,
+        embedding_dim=config.embedding_dim,
+        num_filters=config.num_filters,
+        dropout_rate=config.dropout_rate,
+    ).to(device)
     criterion = nn.BCELoss(reduction='none')
-    optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
 
     best_f1 = -1.0
     checkpoint_dir = Path(args.checkpoint_dir)
@@ -163,6 +172,7 @@ def select_decision_threshold(model: PinyinTextCNN, loader: DataLoader, device: 
     integer_labels = [int(value) for value in labels]
     best_threshold = 0.5
     best_key: tuple[float, int, int, float] | None = None
+    best_distance_to_center: float | None = None
 
     for step in range(1, 100):
         threshold = step / 100
@@ -171,10 +181,22 @@ def select_decision_threshold(model: PinyinTextCNN, loader: DataLoader, device: 
         false_negatives = sum(1 for label, predicted in zip(integer_labels, binary_predictions) if label == 1 and predicted == 0)
         f1 = f1_score(integer_labels, binary_predictions, zero_division=0)
         candidate_key = (false_positives + false_negatives, false_positives, false_negatives, -f1)
+        candidate_distance_to_center = abs(threshold - 0.5)
 
         if best_key is None or candidate_key < best_key:
             best_key = candidate_key
             best_threshold = threshold
+            best_distance_to_center = candidate_distance_to_center
+        elif candidate_key == best_key and (
+            best_distance_to_center is None
+            or candidate_distance_to_center < best_distance_to_center
+            or (
+                candidate_distance_to_center == best_distance_to_center
+                and threshold > best_threshold
+            )
+        ):
+            best_threshold = threshold
+            best_distance_to_center = candidate_distance_to_center
 
     return best_threshold
 

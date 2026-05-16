@@ -15,6 +15,7 @@ vi.mock('@/ml/tokenizer', () => ({
   tokensToIds: mocks.tokensToIds,
 }));
 
+import { clearCachedReplyDecisions } from '@/background/reply-decision-cache';
 import { evaluateCollectedThread } from '@/background/thread-processor';
 import type { CollectedThreadPayload, ExtensionSettings } from '@/shared/types';
 
@@ -48,6 +49,7 @@ const payload: CollectedThreadPayload = {
 
 describe('thread processor', () => {
   beforeEach(() => {
+    clearCachedReplyDecisions();
     mocks.predictSpamScore.mockReset();
     mocks.tokensToIds.mockClear();
   });
@@ -69,5 +71,21 @@ describe('thread processor', () => {
 
     expect(reply.label).toBe(1);
     expect(reply.modelConfidence).toBe(0.33);
+  });
+
+  it('reuses cached scores for the same reply id and reapplies the latest threshold', async () => {
+    mocks.predictSpamScore.mockResolvedValue(0.33);
+
+    const [firstReply] = await evaluateCollectedThread(payload, settings);
+    const [secondReply] = await evaluateCollectedThread(payload, {
+      ...settings,
+      modelThreshold: 0.5,
+    });
+
+    expect(firstReply.label).toBe(1);
+    expect(secondReply.label).toBe(0);
+    expect(secondReply.modelConfidence).toBe(0.33);
+    expect(mocks.predictSpamScore).toHaveBeenCalledTimes(1);
+    expect(mocks.tokensToIds).toHaveBeenCalledTimes(1);
   });
 });
