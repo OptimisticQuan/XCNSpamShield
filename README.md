@@ -26,8 +26,8 @@ Load `extension/dist` as an unpacked extension after a build.
 ```bash
 cd ml
 uv sync
-uv run build-vocab --input ../artifacts/sample-data/sample_export.json
-uv run prepare-dataset --input ../artifacts/sample-data/sample_export.json
+uv run build-vocab
+uv run prepare-dataset
 uv run train-model --dataset data/processed/dataset.jsonl
 uv run export-onnx --checkpoint outputs/checkpoints/best.pt
 uv run convert-tfjs --onnx outputs/onnx/spam_model.onnx --output-dir outputs/tfjs_model
@@ -48,6 +48,7 @@ node scripts/copy-model.mjs --source ml/outputs/tfjs_model --target extension/pu
 - Training dataset preparation, vocabulary building, TextCNN training, ONNX export, TF.js conversion wrapper, and backend comparison script.
 - Reply preprocessing now combines `author_name:original_text`, normalizes common obfuscation symbols including digit, Greek, and Cyrillic lookalikes, strips punctuation and zero-width characters, preserves emoji, and removes non-pinyin Latin fragments.
 - The classifier now uses reply-only `cleaned_pinyin` tokens for both training and online inference; main-post text is kept for browsing/export, but it is no longer part of the model input.
+- Python training now reads exported JSON files from `ml/data/raw/` by default and only merges reply-level `cleaned_pinyin` samples; legacy local normalization code has been removed.
 
 ## Known limits
 

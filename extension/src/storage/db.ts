@@ -109,12 +109,9 @@ export async function upsertThreadPayload(payload: ExtractedThreadPayload): Prom
   const database = await getDatabase();
   const transaction = database.transaction(['threads', 'replies'], 'readwrite');
   const uniqueReplies = dedupeReplies(payload.replies);
+  const existingThread = await transaction.objectStore('threads').get(payload.threadId);
 
-  const threadRecord: ThreadStoreRecord = {
-    threadId: payload.threadId,
-    mainPost: payload.mainPost,
-    createdAt: Date.now(),
-  };
+  const threadRecord = mergeThreadRecord(existingThread, payload);
   await transaction.objectStore('threads').put(threadRecord);
 
   for (const reply of uniqueReplies) {
@@ -129,6 +126,29 @@ export async function upsertThreadPayload(payload: ExtractedThreadPayload): Prom
 
 function dedupeReplies(replies: ReplyRecord[]): ReplyRecord[] {
   return Array.from(new Map(replies.map((reply) => [reply.replyId, reply])).values());
+}
+
+function mergeThreadRecord(
+  existing: ThreadStoreRecord | undefined,
+  incoming: ExtractedThreadPayload,
+): ThreadStoreRecord {
+  return {
+    threadId: incoming.threadId,
+    mainPost: mergeMainPostRecord(existing?.mainPost, incoming.mainPost),
+    createdAt: existing?.createdAt ?? Date.now(),
+  };
+}
+
+function mergeMainPostRecord(existing: MainPostRecord | undefined, incoming: MainPostRecord): MainPostRecord {
+  if (!existing) {
+    return incoming;
+  }
+
+  return {
+    author: incoming.author || existing.author,
+    text: incoming.text || existing.text,
+    timestamp: incoming.timestamp || existing.timestamp,
+  };
 }
 
 function mergeReply(existing: ReplyRecord | undefined, incoming: ReplyRecord): ReplyRecord {

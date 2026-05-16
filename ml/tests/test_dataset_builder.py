@@ -6,7 +6,9 @@ from src.preprocessing.dataset_builder import build_dataset_rows, iter_reply_row
 def test_iter_reply_rows_prefers_exported_cleaned_pinyin() -> None:
     rows = iter_reply_rows(
         [
-            {
+            (
+                Path('sample-a.json'),
+                {
                 'data': [
                     {
                         'thread_id': 'thread-1',
@@ -23,12 +25,43 @@ def test_iter_reply_rows_prefers_exported_cleaned_pinyin() -> None:
                             }
                         ],
                     }
-                ]
-            }
+                    ]
+                },
+            )
         ]
     )
 
     assert rows[0]['cleaned_pinyin'] == 'xiao xuan : sao 😎'
+    assert rows[0]['source'] == 'manual'
+
+
+def test_iter_reply_rows_requires_cleaned_pinyin() -> None:
+    try:
+        iter_reply_rows(
+            [
+                (
+                    Path('legacy.json'),
+                    {
+                        'data': [
+                            {
+                                'thread_id': 'thread-1',
+                                'replies': [
+                                    {
+                                        'reply_id': 'reply-1',
+                                        'label': 0,
+                                        'source': 'auto',
+                                    }
+                                ],
+                            }
+                        ]
+                    },
+                )
+            ]
+        )
+    except ValueError as error:
+        assert 'Missing cleaned_pinyin' in str(error)
+    else:
+        raise AssertionError('Expected iter_reply_rows to reject replies without cleaned_pinyin')
 
 
 def test_build_dataset_rows_uses_reply_only_model_tokens(tmp_path: Path) -> None:
@@ -41,3 +74,20 @@ def test_build_dataset_rows_uses_reply_only_model_tokens(tmp_path: Path) -> None
     _, rows = build_dataset_rows([export_path], vocab_path=tmp_path / 'vocab.txt')
 
     assert rows[0]['tokens'] == ['[CLS]', 'xiao', 'xuan', ':', 'sao', '😎', '[SEP]']
+
+
+def test_build_dataset_rows_merges_all_raw_json_replies(tmp_path: Path) -> None:
+    raw_dir = tmp_path / 'raw'
+    raw_dir.mkdir()
+    (raw_dir / 'a.json').write_text(
+        '{"data": [{"thread_id": "thread-a", "replies": [{"reply_id": "reply-a", "cleaned_pinyin": "ni hao", "label": 0, "source": "auto"}]}]}',
+        encoding='utf-8',
+    )
+    (raw_dir / 'b.json').write_text(
+        '{"data": [{"thread_id": "thread-b", "replies": [{"reply_id": "reply-b", "cleaned_pinyin": "zai jian", "label": 1, "source": "manual"}]}]}',
+        encoding='utf-8',
+    )
+
+    _, rows = build_dataset_rows([raw_dir], vocab_path=tmp_path / 'vocab.txt')
+
+    assert [row['reply_id'] for row in rows] == ['reply-a', 'reply-b']

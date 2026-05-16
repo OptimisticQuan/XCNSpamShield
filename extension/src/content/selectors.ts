@@ -44,9 +44,10 @@ export function parseTweetArticle(article: HTMLElement): ParsedTweet | null {
     return null;
   }
 
-  const tweetTextNode = article.querySelector<HTMLElement>('div[data-testid="tweetText"]');
+  const tweetTextNode = queryOwnTweetElement<HTMLElement>(article, 'div[data-testid="tweetText"]');
   const tweetText = extractTweetText(tweetTextNode);
-  const timestampValue = statusLink.querySelector<HTMLTimeElement>('time')?.dateTime ?? article.querySelector<HTMLTimeElement>('time')?.dateTime;
+  const timestampValue = queryOwnTweetElement<HTMLTimeElement>(article, 'a > time')?.dateTime
+    ?? queryOwnTweetElement<HTMLTimeElement>(article, 'time')?.dateTime;
 
   return {
     article,
@@ -59,7 +60,7 @@ export function parseTweetArticle(article: HTMLElement): ParsedTweet | null {
 }
 
 export function getActionBar(article: HTMLElement): HTMLElement | null {
-  return article.querySelector<HTMLElement>('div[role="group"]');
+  return queryOwnTweetElement<HTMLElement>(article, 'div[role="group"]');
 }
 
 export function extractMainTweet(tweets: ParsedTweet[]): ParsedTweet | null {
@@ -101,12 +102,12 @@ function getTweetScopeRoot(): ParentNode {
 }
 
 function findStatusLink(article: HTMLElement): HTMLAnchorElement | null {
-  const timeLink = article.querySelector<HTMLTimeElement>('a > time')?.parentElement;
+  const timeLink = queryOwnTweetElement<HTMLTimeElement>(article, 'a > time')?.parentElement;
   if (timeLink instanceof HTMLAnchorElement && timeLink.href) {
     return timeLink;
   }
 
-  const statusLinks = Array.from(article.querySelectorAll<HTMLAnchorElement>('a[href*="/status/"]')).filter(
+  const statusLinks = queryOwnTweetElements<HTMLAnchorElement>(article, 'a[href*="/status/"]').filter(
     (link) => extractTweetId(link.href) !== null,
   );
 
@@ -115,8 +116,8 @@ function findStatusLink(article: HTMLElement): HTMLAnchorElement | null {
 
 function extractAuthorHandle(article: HTMLElement, statusLink: HTMLAnchorElement): string | null {
   const avatarContainer =
-    article.querySelector<HTMLElement>('div[data-testid="Tweet-User-Avatar"] div[data-testid^="UserAvatar-Container-"]') ??
-    article.querySelector<HTMLElement>('div[data-testid^="UserAvatar-Container-"]');
+    queryOwnTweetElement<HTMLElement>(article, 'div[data-testid="Tweet-User-Avatar"] div[data-testid^="UserAvatar-Container-"]') ??
+    queryOwnTweetElement<HTMLElement>(article, 'div[data-testid^="UserAvatar-Container-"]');
 
   const avatarHandle = avatarContainer?.dataset.testid?.replace(/^UserAvatar-Container-/u, '').trim();
   if (avatarHandle) {
@@ -128,17 +129,17 @@ function extractAuthorHandle(article: HTMLElement, statusLink: HTMLAnchorElement
     return authorFromLink;
   }
 
-  const profileLink = article.querySelector<HTMLAnchorElement>('div[data-testid="User-Name"] a[href^="/"]');
+  const profileLink = queryOwnTweetElement<HTMLAnchorElement>(article, 'div[data-testid="User-Name"] a[href^="/"]');
   const profileHandle = profileLink?.getAttribute('href')?.split('/').filter(Boolean)[0];
   if (profileHandle) {
     return profileHandle;
   }
 
-  return article.querySelector<HTMLElement>('div[data-testid="User-Name"] span')?.innerText?.trim() ?? null;
+  return queryOwnTweetElement<HTMLElement>(article, 'div[data-testid="User-Name"] span')?.innerText?.trim() ?? null;
 }
 
 function extractAuthorName(article: HTMLElement): string | null {
-  const spans = Array.from(article.querySelectorAll<HTMLElement>('div[data-testid="User-Name"] span'));
+  const spans = queryOwnTweetElements<HTMLElement>(article, 'div[data-testid="User-Name"] span');
 
   for (const span of spans) {
     const text = (span.innerText || span.textContent || '').trim();
@@ -193,4 +194,14 @@ function normalizeTweetText(value: string): string {
 
 function isVisuallyEmptyText(value: string): boolean {
   return value.replace(/[\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180b-\u180e\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufe00-\ufe0f\ufeff]/gu, '').trim().length === 0;
+}
+
+function queryOwnTweetElement<T extends Element>(article: HTMLElement, selector: string): T | null {
+  return queryOwnTweetElements<T>(article, selector)[0] ?? null;
+}
+
+function queryOwnTweetElements<T extends Element>(article: HTMLElement, selector: string): T[] {
+  return Array.from(article.querySelectorAll<T>(selector)).filter(
+    (element) => element.closest('article[data-testid="tweet"]') === article,
+  );
 }

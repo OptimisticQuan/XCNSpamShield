@@ -125,4 +125,51 @@ describe('selectors', () => {
     expect(parsed?.text).toBe('🔥🔥🔥');
     expect(parsed?.authorName).toBe('Emoji 用户');
   });
+
+  it('ignores nested tweet content when parsing the focal status tweet', () => {
+    window.history.replaceState({}, '', '/main_author/status/9999999999');
+    document.body.innerHTML = `
+      <main>
+        <section data-testid="primaryColumn">
+          <article data-testid="tweet">
+            <article data-testid="tweet">
+              <div data-testid="Tweet-User-Avatar">
+                <div data-testid="UserAvatar-Container-replier"></div>
+              </div>
+              <div data-testid="User-Name">
+                <a href="/replier"><span>回复作者</span></a>
+                <a href="/replier"><span>@replier</span></a>
+              </div>
+              <div data-testid="tweetText">clicked reply content</div>
+              <a href="https://x.com/replier/status/8888888888">
+                <time datetime="2025-05-15T09:05:00.000Z"></time>
+              </a>
+            </article>
+            <div data-testid="Tweet-User-Avatar">
+              <div data-testid="UserAvatar-Container-main_author"></div>
+            </div>
+            <div data-testid="User-Name">
+              <a href="/main_author"><span>主贴作者</span></a>
+              <a href="/main_author"><span>@main_author</span></a>
+            </div>
+            <div data-testid="tweetText">main post content</div>
+            <a href="https://x.com/main_author/status/9999999999">
+              <time datetime="2025-05-15T09:00:00.000Z"></time>
+            </a>
+          </article>
+        </section>
+      </main>
+    `;
+
+    const article = document.querySelector<HTMLElement>('section[data-testid="primaryColumn"] > article[data-testid="tweet"]');
+    expect(article).not.toBeNull();
+
+    const parsed = parseTweetArticle(article!);
+    expect(parsed).toMatchObject({
+      tweetId: '9999999999',
+      author: 'main_author',
+      authorName: '主贴作者',
+      text: 'main post content',
+    });
+  });
 });

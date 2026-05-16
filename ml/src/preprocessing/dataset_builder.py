@@ -5,9 +5,9 @@ import json
 from pathlib import Path
 from typing import Iterable
 
-from src.preprocessing.pinyin_normalizer import build_model_input_from_cleaned_pinyin, normalize_reply_to_pinyin_words
-from src.preprocessing.tokenizer import Vocabulary, build_vocabulary
+from src.preprocessing.tokenizer import Vocabulary, build_vocabulary, tokenize_cleaned_pinyin
 
+DEFAULT_RAW_DATA_PATH = Path('data/raw')
 DEFAULT_VOCAB_PATH = Path('data/vocab.txt')
 DEFAULT_DATASET_PATH = Path('data/processed/dataset.jsonl')
 SEQUENCE_LENGTH = 100
@@ -15,30 +15,28 @@ MANUAL_SAMPLE_WEIGHT = 1.5
 AUTO_SAMPLE_WEIGHT = 1.0
 
 
-def load_export_payloads(paths: Iterable[Path]) -> list[dict]:
-    payloads: list[dict] = []
+def load_export_payloads(paths: Iterable[Path]) -> list[tuple[Path, dict]]:
+    payloads: list[tuple[Path, dict]] = []
     for path in expand_paths(paths):
-        payloads.append(json.loads(path.read_text(encoding='utf-8')))
+        payloads.append((path, json.loads(path.read_text(encoding='utf-8'))))
     return payloads
 
 
-def iter_reply_rows(payloads: Iterable[dict]) -> list[dict]:
+def iter_reply_rows(payloads: Iterable[tuple[Path, dict]]) -> list[dict]:
     rows: list[dict] = []
-    for payload in payloads:
+    for payload_path, payload in payloads:
         for thread in payload.get('data', []):
-            main_post = thread.get('main_post', {})
             for reply in thread.get('replies', []):
-                author_name = reply.get('author_name') or reply.get('author', '')
                 cleaned_pinyin = (reply.get('cleaned_pinyin') or '').strip()
                 if not cleaned_pinyin:
-                    cleaned_pinyin = normalize_reply_to_pinyin_words(author_name, reply.get('original_text', ''))
+                    raise ValueError(
+                        f'Missing cleaned_pinyin for reply {reply.get("reply_id", "unknown")} in {payload_path}. '
+                        'Re-export these samples with the extension before training.'
+                    )
                 rows.append(
                     {
                         'thread_id': thread.get('thread_id', ''),
                         'reply_id': reply.get('reply_id', ''),
-                        'author_name': author_name,
-                        'main_post_text': main_post.get('text', ''),
-                        'reply_text': reply.get('original_text', ''),
                         'cleaned_pinyin': cleaned_pinyin,
                         'label': int(reply.get('label', 0)),
                         'source': reply.get('source', 'auto'),
@@ -48,15 +46,18 @@ def iter_reply_rows(payloads: Iterable[dict]) -> list[dict]:
     return rows
 
 
-def build_dataset_rows(export_paths: Iterable[Path], vocab_path: Path = DEFAULT_VOCAB_PATH) -> tuple[Vocabulary, list[dict]]:
-    payloads = load_export_payloads(export_paths)
+def build_dataset_rows(
+    export_paths: Iterable[Path] | None = None,
+    vocab_path: Path = DEFAULT_VOCAB_PATH,
+) -> tuple[Vocabulary, list[dict]]:
+    payloads = load_export_payloads(export_paths or [DEFAULT_RAW_DATA_PATH])
     rows = iter_reply_rows(payloads)
     vocabulary = build_vocabulary(row['cleaned_pinyin'] for row in rows)
     vocabulary.save(vocab_path)
 
     dataset_rows: list[dict] = []
     for row in rows:
-        tokens = build_model_input_from_cleaned_pinyin(row['cleaned_pinyin'])
+        tokens = tokenize_cleaned_pinyin(row['cleaned_pinyin'])
         dataset_rows.append(
             {
                 **row,
@@ -80,12 +81,12 @@ def read_dataset(path: Path) -> list[dict]:
 
 
 def build_vocab_cli() -> None:
-    parser = argparse.ArgumentParser(description='Build vocab.txt from exported JSON files.')
-    parser.add_argument('--input', action='append', required=True, help='Input export JSON file or directory.')
+    parser = argparse.ArgumentParser(description='Build vocab.txt from exported JSON files in data/raw by default.')
+    parser.add_argument('--input', action='append', help='Input export JSON file or directory. Defaults to data/raw/.')
     parser.add_argument('--output', default=str(DEFAULT_VOCAB_PATH), help='Path to vocab.txt.')
     args = parser.parse_args()
 
-    export_paths = [Path(value) for value in args.input]
+    export_paths = [Path(value) for value in args.input] if args.input else [DEFAULT_RAW_DATA_PATH]
     payloads = load_export_payloads(export_paths)
     rows = iter_reply_rows(payloads)
     vocabulary = build_vocabulary(row['cleaned_pinyin'] for row in rows)
@@ -94,13 +95,14 @@ def build_vocab_cli() -> None:
 
 
 def prepare_dataset_cli() -> None:
-    parser = argparse.ArgumentParser(description='Prepare a JSONL dataset from exported JSON files.')
-    parser.add_argument('--input', action='append', required=True, help='Input export JSON file or directory.')
+    parser = argparse.ArgumentParser(description='Prepare a JSONL dataset from exported JSON files in data/raw by default.')
+    parser.add_argument('--input', action='append', help='Input export JSON file or directory. Defaults to data/raw/.')
     parser.add_argument('--output', default=str(DEFAULT_DATASET_PATH), help='Path to dataset.jsonl.')
     parser.add_argument('--vocab', default=str(DEFAULT_VOCAB_PATH), help='Path to vocab.txt.')
     args = parser.parse_args()
 
-    _, rows = build_dataset_rows([Path(value) for value in args.input], vocab_path=Path(args.vocab))
+    export_paths = [Path(value) for value in args.input] if args.input else [DEFAULT_RAW_DATA_PATH]
+    _, rows = build_dataset_rows(export_paths, vocab_path=Path(args.vocab))
     write_dataset(Path(args.output), rows)
     print(f'Prepared {len(rows)} rows at {args.output}')
 

@@ -3,8 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterable
 
-from src.preprocessing.pinyin_normalizer import build_model_input_from_cleaned_pinyin
-
 SPECIAL_TOKENS = ['[PAD]', '[UNK]', '[CLS]', '[SEP]']
 BASE_VOCAB = SPECIAL_TOKENS + [
     ':',
@@ -44,8 +42,13 @@ class Vocabulary:
         return cls(path.read_text(encoding='utf-8').splitlines())
 
 
+def tokenize_cleaned_pinyin(cleaned_pinyin: str) -> list[str]:
+    tokens = [token for token in cleaned_pinyin.split() if token]
+    return ['[CLS]', *(tokens or ['[UNK]']), '[SEP]']
+
+
 def build_vocabulary(cleaned_pinyins: Iterable[str]) -> Vocabulary:
     tokens = list(BASE_VOCAB)
     for cleaned_pinyin in cleaned_pinyins:
-        tokens.extend(build_model_input_from_cleaned_pinyin(cleaned_pinyin))
+        tokens.extend(tokenize_cleaned_pinyin(cleaned_pinyin))
     return Vocabulary(tokens)
