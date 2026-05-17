@@ -1,7 +1,519 @@
 {
-  "export_time": 1778990651041,
-  "total_records": 240,
+  "export_time": 1779002944079,
+  "total_records": 305,
   "data": [
+    {
+      "thread_id": "2055647831785107528",
+      "main_post": {
+        "author": "dearemon",
+        "text": "哈哈看得太快了",
+        "timestamp": 1778939609000
+      },
+      "replies": [
+        {
+          "reply_id": "2055404200872595886",
+          "author": "MizuSakanaz",
+          "author_name": "MizuSakana",
+          "original_text": "诸葛亮和司马懿竟然有龙阳之癖",
+          "cleaned_pinyin": "mi zu sa kan a : zhu ge liang he si ma yi jing ran you long yang zhi pi",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.002533199265599251
+        },
+        {
+          "reply_id": "2055421033235243335",
+          "author": "Bryant337828",
+          "author_name": "Bryant",
+          "original_text": "他真正想说的是，分手以后还能做炮友吗？",
+          "cleaned_pinyin": ": ta zhen zheng xiang shuo de shi fen shou yi hou hai neng zuo pao you ma",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.009915468282997608
+        },
+        {
+          "reply_id": "2055421988987105649",
+          "author": "Yick_Yang",
+          "author_name": "Yick Yang",
+          "original_text": "传下去，诸葛亮和司马懿是男同。",
+          "cleaned_pinyin": "yang : chuan xia qu zhu ge liang he si ma yi shi nan tong",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.011193457990884781
+        },
+        {
+          "reply_id": "2055436070364586299",
+          "author": "leonz32198474",
+          "author_name": "Leon",
+          "original_text": "看在他贼的份上，再给个机会",
+          "cleaned_pinyin": "le o n : kan zai ta zei de fen shang zai gei ge ji hui",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.018170909956097603
+        },
+        {
+          "reply_id": "2055445288098164925",
+          "author": "a9457709256697",
+          "author_name": "推特第一美腿（门88）",
+          "original_text": "分手以后还能做吗？他想问的是这个，分手以后，还想继续做。",
+          "cleaned_pinyin": "tui te di yi mei tui men : fen shou yi hou hai neng zuo ma ta xiang wen de shi zhe ge fen shou yi hou hai xiang ji xu zuo",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.020536208525300026
+        },
+        {
+          "reply_id": "2055449472541556965",
+          "author": "pinfan1",
+          "author_name": "pin fan",
+          "original_text": "分手了还想做哪种朋友",
+          "cleaned_pinyin": "pin fan : fen shou liao hai xiang zuo na zhong peng you",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.010431251488626003
+        },
+        {
+          "reply_id": "2055496141345865737",
+          "author": "GamingPowerbaaz",
+          "author_name": "Powerbaaz Gaming",
+          "original_text": "完整版来了\n\nhttps://\npan.quark.cn/s/5e324cb13122",
+          "cleaned_pinyin": "ga ming : wan zheng ban lai liao : pan",
+          "label": 1,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.9901489019393921
+        },
+        {
+          "reply_id": "2055504197999849658",
+          "author": "SH1oUn",
+          "author_name": "涂涂姐",
+          "original_text": "这不是人亮懿的同人对话吗，老傻子营销号又搁那偷的图发推了，真是看都不看一眼",
+          "cleaned_pinyin": "tu tu jie : zhe bu shi ren liang yi de tong ren dui hua ma lao sha zi ying xiao hao you ge na tou de tu fa tui liao zhen shi kan dou bu kan yi yan",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.0014244156191125512
+        },
+        {
+          "reply_id": "2055505197448008123",
+          "author": "jo_quail",
+          "author_name": "Jo Jo Quail Singh",
+          "original_text": "完整版来了\n\nhttps://\npan.quark.cn/s/d902ed1ce502",
+          "cleaned_pinyin": ": wan zheng ban lai liao : pan",
+          "label": 1,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.9960772395133972
+        },
+        {
+          "reply_id": "2055505645781369293",
+          "author": "Afei_th",
+          "author_name": "_啊翡",
+          "original_text": "差点就被骗了。果然中文的顺序不影响阅读",
+          "cleaned_pinyin": "a fei : cha dian jiu bei pian liao guo ran zhong wen de shun xu bu ying xiang yue du",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.02583283931016922
+        },
+        {
+          "reply_id": "2055506258556489761",
+          "author": "magee0828",
+          "author_name": "尧哥(Martin)",
+          "original_text": "答应了，又觉得不对——说明他也还没想清楚自己要什么。",
+          "cleaned_pinyin": "yao ge : da ying liao you jue de bu dui shuo ming ta ye hai mei xiang qing chu zi ji yao shen me",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.002294957870617509
+        },
+        {
+          "reply_id": "2055520252965061110",
+          "author": "Aoyi21",
+          "author_name": "奥一AoYi",
+          "original_text": "中文读阅语序有时候不重要\n有时候又特别重要",
+          "cleaned_pinyin": "ao yi ao yi : zhong wen du yue yu xu you shi hou bu zhong yao you shi hou you te bie zhong yao",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.008190811611711979
+        },
+        {
+          "reply_id": "2055543597660053657",
+          "author": "nata_wu0425",
+          "author_name": "抹抹",
+          "original_text": "以後別做朋友 朋友不能牽手",
+          "cleaned_pinyin": "mo mo : yi hou bie zuo peng you peng you bu neng qian shou",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.0002793523308355361
+        },
+        {
+          "reply_id": "2055595812374380684",
+          "author": "a315897",
+          "author_name": "萨姆林",
+          "original_text": "不是有那种重点放后面的说话方式吗哪的来着",
+          "cleaned_pinyin": "sa mu lin : bu shi you na zhong zhong dian fang hou mian de shuo hua fang shi ma na de lai zhe",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.0013731711078435183
+        },
+        {
+          "reply_id": "2055626359482007712",
+          "author": "WEEXAILabs",
+          "author_name": "WEEX AI Labs",
+          "original_text": "司马懿和诸葛亮？？",
+          "cleaned_pinyin": "ai : si ma yi he zhu ge liang",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.020681608468294144
+        },
+        {
+          "reply_id": "2055633859237368178",
+          "author": "ZimmermanS93461",
+          "author_name": "SusieZimmerman",
+          "original_text": "完整版来了来了！\n\nhttps://\npan.quark.cn/s/1ac0b20b598b",
+          "cleaned_pinyin": "su si e zi m m er man : wan zheng ban lai liao lai liao : pan",
+          "label": 1,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.8595440983772278
+        },
+        {
+          "reply_id": "2055634659607019525",
+          "author": "LisaThomps34334",
+          "author_name": "东北字母墙",
+          "original_text": "等等等等等 这不对吧兄弟！",
+          "cleaned_pinyin": "dong bei zi mu qiang : deng deng deng deng deng zhe bu dui ba xiong di",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.0007394965505227447
+        },
+        {
+          "reply_id": "2055640994612404710",
+          "author": "kam9691136682",
+          "author_name": "從田閒置",
+          "original_text": "這種人直接滾蛋",
+          "cleaned_pinyin": "cong tian xian zhi : zhe zhong ren zhi jie gun dan",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.004873331170529127
+        },
+        {
+          "reply_id": "2055647487378276858",
+          "author": "dearemon",
+          "author_name": "禿道道",
+          "original_text": "不对的不对的",
+          "cleaned_pinyin": "tu dao dao : bu dui de bu dui de",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.00010660671978257596
+        },
+        {
+          "reply_id": "2055647559520243960",
+          "author": "dearemon",
+          "author_name": "禿道道",
+          "original_text": "分手了就不对了！不对的",
+          "cleaned_pinyin": "tu dao dao : fen shou liao jiu bu dui liao bu dui de",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.0006591103156097233
+        },
+        {
+          "reply_id": "2055647724348096634",
+          "author": "dearemon",
+          "author_name": "禿道道",
+          "original_text": "不行的不行的",
+          "cleaned_pinyin": "tu dao dao : bu xing de bu xing de",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.000825150404125452
+        },
+        {
+          "reply_id": "2055647912366055919",
+          "author": "dearemon",
+          "author_name": "禿道道",
+          "original_text": "传下去！",
+          "cleaned_pinyin": "tu dao dao : chuan xia qu",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.016396258026361465
+        },
+        {
+          "reply_id": "2055680659600146914",
+          "author": "kimigasuki_0856",
+          "author_name": "君が好き。",
+          "original_text": "完整版来了\n\nhttps://\npan.quark.cn/s/b4fb65a39a88",
+          "cleaned_pinyin": "jun hao : wan zheng ban lai liao : pan",
+          "label": 1,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.982935905456543
+        },
+        {
+          "reply_id": "2055687194535428313",
+          "author": "ByrdKarren24593",
+          "author_name": "心碎小黄",
+          "original_text": "有弟弟想认‌识吗？‌k42",
+          "cleaned_pinyin": "xin sui xiao huang : you di di xiang ren shi ma",
+          "label": 1,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.9716155529022217
+        },
+        {
+          "reply_id": "2055688429963554872",
+          "author": "jj5390700930635",
+          "author_name": "绵绵",
+          "original_text": "分手了可以做炮友",
+          "cleaned_pinyin": "mian mian : fen shou liao ke yi zuo pao you",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.0062346430495381355
+        },
+        {
+          "reply_id": "2055705495537852442",
+          "author": "LeiaWalter30659",
+          "author_name": "小绵羊",
+          "original_text": "刚分手想被爱4qH",
+          "cleaned_pinyin": "xiao mian yang : gang fen shou xiang bei ai",
+          "label": 1,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.975066602230072
+        },
+        {
+          "reply_id": "2055705518778265699",
+          "author": "LambertLui76815",
+          "author_name": "夏日柠",
+          "original_text": "刚分手想被爱29cI",
+          "cleaned_pinyin": "xia ri ning : gang fen shou xiang bei ai",
+          "label": 1,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.9798027873039246
+        },
+        {
+          "reply_id": "2055708820601798780",
+          "author": "PowersAlfo42892",
+          "author_name": "苏苏",
+          "original_text": "刚分手想被爱9mH",
+          "cleaned_pinyin": "su su : gang fen shou xiang bei ai",
+          "label": 1,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.8749898076057434
+        },
+        {
+          "reply_id": "2055709510178918748",
+          "author": "biy1440470",
+          "author_name": "打倒狗资本",
+          "original_text": "分手了以后还能做吗？ 朋友",
+          "cleaned_pinyin": "da dao gou zi ben : fen shou liao yi hou hai neng zuo ma peng you",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.008246203884482384
+        },
+        {
+          "reply_id": "2055722628481208394",
+          "author": "qinlang642",
+          "author_name": "亚瑟王",
+          "original_text": "太对了",
+          "cleaned_pinyin": "ya se wang : tai dui liao",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.007982536219060421
+        },
+        {
+          "reply_id": "2055726722071531991",
+          "author": "AdrienWyat42786",
+          "author_name": "苏苏",
+          "original_text": "来个真人认识一下16dT",
+          "cleaned_pinyin": "su su : lai ge zhen ren ren shi yi xia",
+          "label": 1,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.9925612211227417
+        },
+        {
+          "reply_id": "2055758835504349671",
+          "author": "jialpy",
+          "author_name": "佳",
+          "original_text": "司马懿和诸葛亮分了",
+          "cleaned_pinyin": "jia : si ma yi he zhu ge liang fen liao",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.02066660486161709
+        },
+        {
+          "reply_id": "2055837610967450101",
+          "author": "Yonginmacao",
+          "author_name": "复利行者｜CompoundWalker",
+          "original_text": "可以做啊",
+          "cleaned_pinyin": "fu li xing zhe : ke yi zuo a",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.00032627719338051975
+        },
+        {
+          "reply_id": "2055841053530599782",
+          "author": "AomyYing",
+          "author_name": "Aomyying",
+          "original_text": "分手以后还能做吗 ？朋友",
+          "cleaned_pinyin": ": fen shou yi hou hai neng zuo ma peng you",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992582842,
+          "matched_rules": [],
+          "model_confidence": 0.0038551141042262316
+        }
+      ]
+    },
+    {
+      "thread_id": "2055659347922108810",
+      "main_post": {
+        "author": "dearemon",
+        "text": "",
+        "timestamp": 1778942355000
+      },
+      "replies": [
+        {
+          "reply_id": "2055714568350077225",
+          "author": "elodia41479",
+          "author_name": "樱花雨",
+          "original_text": "刚分手想被爱5tM",
+          "cleaned_pinyin": "ying hua yu : gang fen shou xiang bei ai",
+          "label": 1,
+          "source": "auto",
+          "extract_time": 1778992418405,
+          "matched_rules": [],
+          "model_confidence": 0.982892632484436
+        },
+        {
+          "reply_id": "2055714569591628275",
+          "author": "mozella18475",
+          "author_name": "夏日柠",
+          "original_text": "小狗求抱抱‍89pC",
+          "cleaned_pinyin": "xia ri ning : xiao gou qiu bao bao",
+          "label": 1,
+          "source": "auto",
+          "extract_time": 1778992418405,
+          "matched_rules": [],
+          "model_confidence": 0.9987345337867737
+        },
+        {
+          "reply_id": "2055714569973358819",
+          "author": "erlene16751",
+          "author_name": "梦游记",
+          "original_text": "刚分手想被爱65sQ",
+          "cleaned_pinyin": "meng you ji : gang fen shou xiang bei ai",
+          "label": 1,
+          "source": "auto",
+          "extract_time": 1778992418405,
+          "matched_rules": [],
+          "model_confidence": 0.9730132818222046
+        },
+        {
+          "reply_id": "2055715280022630748",
+          "author": "PhillipGre64657",
+          "author_name": "瑾琪",
+          "original_text": "刚分手想被爱i8",
+          "cleaned_pinyin": "jin qi : gang fen shou xiang bei ai",
+          "label": 1,
+          "source": "auto",
+          "extract_time": 1778992418405,
+          "matched_rules": [],
+          "model_confidence": 0.9803923964500427
+        },
+        {
+          "reply_id": "2055718512686223625",
+          "author": "whisper97744020",
+          "author_name": "凉拌海蜇",
+          "original_text": "入典",
+          "cleaned_pinyin": "liang ban hai zhe : ru dian",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992418405,
+          "matched_rules": [],
+          "model_confidence": 0.003352036466822028
+        },
+        {
+          "reply_id": "2055746600782189024",
+          "author": "DvmEmily11958",
+          "author_name": "亦琳",
+          "original_text": "刚分手想被爱c3",
+          "cleaned_pinyin": "yi lin : gang fen shou xiang bei ai ce",
+          "label": 1,
+          "source": "auto",
+          "extract_time": 1778992418405,
+          "matched_rules": [],
+          "model_confidence": 0.9367753863334656
+        },
+        {
+          "reply_id": "2055794389352362452",
+          "author": "AnthonyOdo43121",
+          "author_name": "书伊寻固炮点击主页",
+          "original_text": "🐬\n\n🤓😏\n\n🤩\n\n💞",
+          "cleaned_pinyin": "shu yi xun gu pao dian ji zhu ye : 🐬 🤓 😏 🤩 💞",
+          "label": 1,
+          "source": "manual",
+          "extract_time": 1778992418405,
+          "matched_rules": [],
+          "model_confidence": 0.09802643954753876
+        }
+      ]
+    },
     {
       "thread_id": "2055742868418138315",
       "main_post": {
@@ -889,6 +1401,54 @@
       },
       "replies": [
         {
+          "reply_id": "2049756781589475547",
+          "author": "lovart_ai",
+          "author_name": "LovartAI",
+          "original_text": "从对话，到绝美影像\n最懂创作者的影像引擎。无需复杂咒语，每一像素皆是逻辑。\n点击浏览网站，开启高效创作。",
+          "cleaned_pinyin": ": cong dui hua dao jue mei ying xiang zui dong chuang zuo zhe de ying xiang yin qing wu xu fu za zhou yu mei yi xiang su jie shi luo ji dian ji liu lan wang zhan kai qi gao xiao chuang zuo",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1779002374835,
+          "matched_rules": [],
+          "model_confidence": 0.01970837637782097
+        },
+        {
+          "reply_id": "2052787014991532068",
+          "author": "TradeOddsIO",
+          "author_name": "TradeOdds",
+          "original_text": "Before your next trade, ask: has this exact setup happened before?\n\nTradeOdds matches today's move, fundamentals, structure and market conditions against 30+ years of history and shows you what happened next.\n\nNo predictions. No signals. Just the base rate.",
+          "cleaned_pinyin": ": : you n o n o ba se",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1779002374830,
+          "matched_rules": [],
+          "model_confidence": 0.0008534221560694277
+        },
+        {
+          "reply_id": "2055251987747238361",
+          "author": "EllepolaMa63601",
+          "author_name": "Manjula Ellepola",
+          "original_text": "Your project is already in trouble. You just don't know it yet. S-BIZ detects overdue tasks, blocked work, and at-risk deadlines the moment they happen — not in Friday's meeting. Apply for early access",
+          "cleaned_pinyin": "man ju la : you me e ting",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1779002374830,
+          "matched_rules": [],
+          "model_confidence": 0.0841587707400322
+        },
+        {
+          "reply_id": "2055609972982243622",
+          "author": "dearemon",
+          "author_name": "禿道道",
+          "original_text": "西班牙以无锻炼价值为由，取消了和中国男足的比赛，我靠，哈哈哈哈哈哈哈哈哈\n哈",
+          "cleaned_pinyin": "tu dao dao : xi ban ya yi wu duan lian jia zhi wei you qu xiao liao he zhong guo nan zu de bi sai wo kao ha ha ha ha ha ha ha ha ha ha",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1779002374844,
+          "matched_rules": [],
+          "model_confidence": 0.00274693313986063
+        },
+        {
           "reply_id": "2055647065850651100",
           "author": "X09COTCC",
           "author_name": "太阳瓜",
@@ -901,6 +1461,18 @@
           "model_confidence": 0.01693493127822876
         },
         {
+          "reply_id": "2055661775589179810",
+          "author": "ji_chunsheng",
+          "author_name": "紀春生",
+          "original_text": "中国通钱信伊和Josh Johnson报道“川习会”。",
+          "cleaned_pinyin": "ji chun sheng : zhong guo tong qian xin yi he bao dao chuan xi hui",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1779002374867,
+          "matched_rules": [],
+          "model_confidence": 0.004478720482438803
+        },
+        {
           "reply_id": "2055818313595601205",
           "author": "Hikarumao",
           "author_name": "Cléophas",
@@ -908,7 +1480,7 @@
           "cleaned_pinyin": ": shuo qi jiang ren jing shen wo xiang qi yi ge jiu shi zai guo nei de shi hou shi hou you yi ge ti zhi nei de tong xing yin yang wo shuo wo ke yi qu liao jie yi xia ri ben shou si zhi shen de jiang ren jing shen ren jia xue yi ge nie shou si yao xian xue ning mo bu hao ji nian ran hou chang tan zi ji zai zhong guo de mou tou bu wen bo dan wei xue tiao jiang hu dou xue liao nian qi zhong ao miao hen duo",
           "label": 0,
           "source": "auto",
-          "extract_time": 1778990469526,
+          "extract_time": 1779002374807,
           "matched_rules": [],
           "model_confidence": 0.0038942478131502867
         },
@@ -920,7 +1492,7 @@
           "cleaned_pinyin": ": you dian fa yu de yang zi liao you dian zao",
           "label": 0,
           "source": "auto",
-          "extract_time": 1778990469526,
+          "extract_time": 1779002374807,
           "matched_rules": [],
           "model_confidence": 0.0018118357984349132
         },
@@ -932,7 +1504,7 @@
           "cleaned_pinyin": "zhu mu lang ma ai : ai you shi hou shi you shi hou shi dao shi zui zhong hai shi kan xing qu",
           "label": 0,
           "source": "auto",
-          "extract_time": 1778990469526,
+          "extract_time": 1779002374807,
           "matched_rules": [],
           "model_confidence": 0.0016451445408165455
         },
@@ -944,7 +1516,7 @@
           "cleaned_pinyin": ": zhen li hai",
           "label": 0,
           "source": "auto",
-          "extract_time": 1778990469526,
+          "extract_time": 1779002374807,
           "matched_rules": [],
           "model_confidence": 0.010726341977715492
         },
@@ -956,7 +1528,7 @@
           "cleaned_pinyin": ":",
           "label": 0,
           "source": "auto",
-          "extract_time": 1778990469526,
+          "extract_time": 1779002374807,
           "matched_rules": [],
           "model_confidence": 0.04446084052324295
         },
@@ -968,7 +1540,7 @@
           "cleaned_pinyin": "zhong jie pian : niu bi de wa",
           "label": 0,
           "source": "auto",
-          "extract_time": 1778990469526,
+          "extract_time": 1779002374807,
           "matched_rules": [],
           "model_confidence": 0.023295918479561806
         },
@@ -978,9 +1550,9 @@
           "author_name": "吴仁华",
           "original_text": "祝贺",
           "cleaned_pinyin": "wu ren hua : zhu he",
-          "label": 1,
-          "source": "auto",
-          "extract_time": 1778990469526,
+          "label": 0,
+          "source": "manual",
+          "extract_time": 1779002374807,
           "matched_rules": [],
           "model_confidence": 0.6667707562446594
         },
@@ -992,7 +1564,7 @@
           "cleaned_pinyin": "jin rong wang : kai en tai li hai liao",
           "label": 0,
           "source": "auto",
-          "extract_time": 1778990469526,
+          "extract_time": 1779002374807,
           "matched_rules": [],
           "model_confidence": 0.044179707765579224
         },
@@ -1004,7 +1576,7 @@
           "cleaned_pinyin": ": li hai",
           "label": 0,
           "source": "auto",
-          "extract_time": 1778990469526,
+          "extract_time": 1779002374807,
           "matched_rules": [],
           "model_confidence": 0.017502842471003532
         },
@@ -1016,7 +1588,7 @@
           "cleaned_pinyin": "xin wei xin wei : wa dou chang zhe me da liao",
           "label": 0,
           "source": "auto",
-          "extract_time": 1778990469526,
+          "extract_time": 1779002374807,
           "matched_rules": [],
           "model_confidence": 0.0013459562323987484
         },
@@ -1028,9 +1600,21 @@
           "cleaned_pinyin": "feng chui chui : bei jing de jiao yu tai juan liao kai en he an ti cheng liao juan wang",
           "label": 0,
           "source": "auto",
-          "extract_time": 1778990469526,
+          "extract_time": 1779002374807,
           "matched_rules": [],
           "model_confidence": 0.032558053731918335
+        },
+        {
+          "reply_id": "2055833455112630755",
+          "author": "imwsl90",
+          "author_name": "卫斯理",
+          "original_text": "多年以后，他是否还记得和自己父亲在星巴克玩iPad的那个微凉的上午……",
+          "cleaned_pinyin": "wei si li : duo nian yi hou ta shi fou hai ji de he zi ji fu qin zai xing ba ke wan de na ge wei liang de shang wu",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1779002374867,
+          "matched_rules": [],
+          "model_confidence": 0.007393413223326206
         },
         {
           "reply_id": "2055833615041429950",
@@ -1040,7 +1624,7 @@
           "cleaned_pinyin": "su li ge : zhe yi dai xiao hai shi zhen zheng de ai yuan zhu min",
           "label": 0,
           "source": "auto",
-          "extract_time": 1778990469526,
+          "extract_time": 1779002374807,
           "matched_rules": [],
           "model_confidence": 0.0010687398025766015
         },
@@ -1052,7 +1636,7 @@
           "cleaned_pinyin": "ai a lin : guo qu yi nian shao qi qian zhe ci yi lai ai fan er mei xiao guo",
           "label": 0,
           "source": "auto",
-          "extract_time": 1778990469526,
+          "extract_time": 1779002374807,
           "matched_rules": [],
           "model_confidence": 0.005451997742056847
         },
@@ -1064,7 +1648,7 @@
           "cleaned_pinyin": ": gong xi",
           "label": 0,
           "source": "auto",
-          "extract_time": 1778990469526,
+          "extract_time": 1779002374807,
           "matched_rules": [],
           "model_confidence": 0.001975610386580229
         },
@@ -1076,7 +1660,7 @@
           "cleaned_pinyin": ": gai yi ge shen ti zi shi kong zhi de yong lai duan lian shen ti",
           "label": 0,
           "source": "auto",
-          "extract_time": 1778990469526,
+          "extract_time": 1779002374807,
           "matched_rules": [],
           "model_confidence": 0.007901977747678757
         },
@@ -1088,7 +1672,7 @@
           "cleaned_pinyin": "su shan su san : li hai liao wo ye hen chou jiang lai hai zi zen me gen de shang wo zhi zi sui xue xiao ju ran mei you ti guo zhe ge gai nian yi nian xue fei ne",
           "label": 0,
           "source": "auto",
-          "extract_time": 1778990469526,
+          "extract_time": 1779002374807,
           "matched_rules": [],
           "model_confidence": 0.028313282877206802
         },
@@ -1100,7 +1684,7 @@
           "cleaned_pinyin": "bu zhi zhe wu : zhe chang lian shen qing bu kui shi hai wai lu chi yi zu",
           "label": 0,
           "source": "auto",
-          "extract_time": 1778990469526,
+          "extract_time": 1779002374807,
           "matched_rules": [],
           "model_confidence": 0.0007041874923743308
         },
@@ -1112,7 +1696,7 @@
           "cleaned_pinyin": "guan si : li hai a wei hai zi jiao ao",
           "label": 0,
           "source": "auto",
-          "extract_time": 1778990469526,
+          "extract_time": 1779002374807,
           "matched_rules": [],
           "model_confidence": 0.003485698252916336
         },
@@ -1124,7 +1708,7 @@
           "cleaned_pinyin": ": niu bi a lao shi kuai fen xiang xia ri chang ru he zhi dao hai zi de ni hai zi zhen you xiu",
           "label": 0,
           "source": "auto",
-          "extract_time": 1778990469526,
+          "extract_time": 1779002374807,
           "matched_rules": [],
           "model_confidence": 0.007962345145642757
         },
@@ -1136,7 +1720,7 @@
           "cleaned_pinyin": ": xian zai xiao xue dou zhe me li hai liao",
           "label": 0,
           "source": "auto",
-          "extract_time": 1778990469526,
+          "extract_time": 1779002374807,
           "matched_rules": [],
           "model_confidence": 0.0011084720026701689
         },
@@ -1148,7 +1732,7 @@
           "cleaned_pinyin": ": yi nian yuan zhe ge shu zhen shi wo yue fu liang bai dao an nian suan cha bu duo dan zhe xiao peng you de bi da duo shu cheng nian ren gao ta na lai zuo bi sai na guan jun hen duo cheng nian ren na lai rang ai bang xie zhou bao gong ju yi yang yong fa jue ding jia zhi",
           "label": 0,
           "source": "auto",
-          "extract_time": 1778990469526,
+          "extract_time": 1779002374807,
           "matched_rules": [],
           "model_confidence": 0.014889185316860676
         },
@@ -1160,9 +1744,69 @@
           "cleaned_pinyin": ": zhe xie nian qing ren qi shi yi jing chao guo shi mian shang zui da duo shu lao dong zhe bu gan xiang xiang ta men zou shang she hui hui qu de duo da de cheng jiu",
           "label": 0,
           "source": "auto",
-          "extract_time": 1778990469526,
+          "extract_time": 1779002374807,
           "matched_rules": [],
           "model_confidence": 0.010879161767661572
+        },
+        {
+          "reply_id": "2055866452603969837",
+          "author": "GoleftGo",
+          "author_name": "凉风",
+          "original_text": "现在的小朋友真是太厉害了。",
+          "cleaned_pinyin": "liang feng : xian zai de xiao peng you zhen shi tai li hai liao",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1779002374807,
+          "matched_rules": [],
+          "model_confidence": 0.003663716372102499
+        },
+        {
+          "reply_id": "2055868928795328964",
+          "author": "mylifcc",
+          "author_name": "lifcc",
+          "original_text": "“太依赖AI”这个反差很有意思。小孩用 AI 做跑酷游戏，最后比的反而是谁还能把手势/色卡这种约束讲清楚。",
+          "cleaned_pinyin": ": tai yi lai ai zhe ge fan cha hen you yi si xiao hai yong ai zuo pao ku you xi zui hou bi de fan er shi shui hai neng ba shou shi se ka zhe zhong yue shu jiang qing chu",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1779002374807,
+          "matched_rules": [],
+          "model_confidence": 0.004583389963954687
+        },
+        {
+          "reply_id": "2055880335909687481",
+          "author": "LVarieur89811",
+          "author_name": "梅知芮免费破处",
+          "original_text": "☁️\n🆒\n🦕\n💎",
+          "cleaned_pinyin": "mei zhi rui mian fei po chu : ☁️ 🆒 🦕 💎",
+          "label": 1,
+          "source": "auto",
+          "extract_time": 1779002374807,
+          "matched_rules": [],
+          "model_confidence": 0.8784278035163879
+        },
+        {
+          "reply_id": "2055880378590838824",
+          "author": "GwynT69899",
+          "author_name": "荣娇玫免费破处",
+          "original_text": "‍👦\n😳\n😘\n🎮",
+          "cleaned_pinyin": "rong jiao mei mian fei po chu : 👦 😳 😘 🎮",
+          "label": 1,
+          "source": "auto",
+          "extract_time": 1779002374807,
+          "matched_rules": [],
+          "model_confidence": 0.9328442811965942
+        },
+        {
+          "reply_id": "2055898735608017027",
+          "author": "Gao88347202",
+          "author_name": "Gao",
+          "original_text": "少爷真帅",
+          "cleaned_pinyin": "gao : shao ye zhen shuai",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1779002374807,
+          "matched_rules": [],
+          "model_confidence": 0.06531794369220734
         }
       ]
     },
@@ -2195,6 +2839,52 @@
       ]
     },
     {
+      "thread_id": "2055842107471077635",
+      "main_post": {
+        "author": "dearemon",
+        "text": "",
+        "timestamp": 1778985928000
+      },
+      "replies": [
+        {
+          "reply_id": "2055848772052369763",
+          "author": "dearemon",
+          "author_name": "禿道道",
+          "original_text": "沒毛病！親就完了！",
+          "cleaned_pinyin": "tu dao dao : mei mao bing qin jiu wan liao",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992532108,
+          "matched_rules": [],
+          "model_confidence": 0.006092997267842293
+        },
+        {
+          "reply_id": "2055849063883645425",
+          "author": "ssynhtn",
+          "author_name": "ssynhtn",
+          "original_text": "啊？谁让他不分男女都接单啊",
+          "cleaned_pinyin": ": a shui rang ta bu fen nan nv dou jie dan a",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1778992532108,
+          "matched_rules": [],
+          "model_confidence": 0.008399744518101215
+        },
+        {
+          "reply_id": "2055865598337314970",
+          "author": "kramer_ric78724",
+          "author_name": "含璇寻固炮点击主页",
+          "original_text": "🔥\n\n🌸\n\n😇💙\n\n🤲",
+          "cleaned_pinyin": "han xuan xun gu pao dian ji zhu ye : 🔥 🌸 😇 💙 🤲",
+          "label": 1,
+          "source": "manual",
+          "extract_time": 1778992532108,
+          "matched_rules": [],
+          "model_confidence": 0.04602661356329918
+        }
+      ]
+    },
+    {
       "thread_id": "2055842577283502143",
       "main_post": {
         "author": "igeekbb",
@@ -3069,6 +3759,156 @@
           "extract_time": 1778990436529,
           "matched_rules": [],
           "model_confidence": 0.21529018878936768
+        }
+      ]
+    },
+    {
+      "thread_id": "2055862879648362787",
+      "main_post": {
+        "author": "wxfengyang",
+        "text": "硬盘都翻倍了",
+        "timestamp": 1778990881000
+      },
+      "replies": [
+        {
+          "reply_id": "2055847831722680481",
+          "author": "gilbert_pa70607",
+          "author_name": "含怡寻固炮点击主页",
+          "original_text": "🔥\n\n🥲\n\n😏\n\n👐🎶",
+          "cleaned_pinyin": "han yi xun gu pao dian ji zhu ye : 🔥 🥲 😏 👐 🎶",
+          "label": 1,
+          "source": "manual",
+          "extract_time": 1778992351747,
+          "matched_rules": [],
+          "model_confidence": 0.105707086622715
+        }
+      ]
+    },
+    {
+      "thread_id": "2055870272474153171",
+      "main_post": {
+        "author": "ChuTrieuViet",
+        "text": "这部中国家庭伦理片火了！\n从4月18日潮汕地区小范围点映起步，不到30天票房狂飙破4亿，热度甚至蔓延到了越南，海外观众也在疯狂求片源。​​​​​​​​​​​​​​​​\n在中国的朋友们有福了",
+        "timestamp": 1778992643000
+      },
+      "replies": [
+        {
+          "reply_id": "2052102507988439123",
+          "author": "AvenorFam",
+          "author_name": "AvenorFam",
+          "original_text": "Avenor — the most powerful AI agent you’ll ever use, installed in one click.\n\nFrom planning your day and handling everyday tasks to generating photos and videos, it does it all in one place.",
+          "cleaned_pinyin": ": ai you o ne gen er a ting o ne",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1779002749001,
+          "matched_rules": [],
+          "model_confidence": 0.00465405685827136
+        },
+        {
+          "reply_id": "2055858346222404027",
+          "author": "ChuTrieuViet",
+          "author_name": "越南大叔",
+          "original_text": "加大牛尾什锦河粉 5.2刀",
+          "cleaned_pinyin": "yue nan da shu : jia da niu wei shen jin he fen dao",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1779002748979,
+          "matched_rules": [],
+          "model_confidence": 0.10352236777544022
+        },
+        {
+          "reply_id": "2055873392054825192",
+          "author": "BaoDHRS",
+          "author_name": "BTpoluk秦鉄柱",
+          "original_text": "舉報 封面很日本",
+          "cleaned_pinyin": "qin tie zhu : ju bao feng mian hen ri ben",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1779002748979,
+          "matched_rules": [],
+          "model_confidence": 0.17498846352100372
+        },
+        {
+          "reply_id": "2055873993765536085",
+          "author": "Mike10675310178",
+          "author_name": "Mike",
+          "original_text": "越南恐怖片恶魔犬中式恐怖风也挺不错，大陆已经没有好看的恐怖片了",
+          "cleaned_pinyin": "mi ke : yue nan kong bu pian e mo quan zhong shi kong bu feng ye ting bu cuo da lu yi jing mei you hao kan de kong bu pian liao",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1779002748979,
+          "matched_rules": [],
+          "model_confidence": 0.00531971687451005
+        },
+        {
+          "reply_id": "2055886548558868988",
+          "author": "nge_z26773678",
+          "author_name": "I nge C z",
+          "original_text": "我看完到处推荐它，天天关心它的最新票房，昨天单一天票房飙升到1.4亿，到今天晚应该有五亿多了，让这种诚意之作多多赚钱吧。",
+          "cleaned_pinyin": "ng e : wo kan wan dao chu tui jian ta tian tian guan xin ta de zui xin piao fang zuo tian dan yi tian piao fang biao sheng dao a yi dao jin tian wan ying gai you wu yi duo liao rang zhe zhong cheng yi zhi zuo duo duo zhuan qian ba",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1779002748979,
+          "matched_rules": [],
+          "model_confidence": 0.018558165058493614
+        },
+        {
+          "reply_id": "2055897886190362981",
+          "author": "allthatrock1",
+          "author_name": "allthatrock",
+          "original_text": "不知道为这电影哭了多少次了，看的时候就从第30.分钟哭到结尾",
+          "cleaned_pinyin": ": bu zhi dao wei zhe dian ying ku liao duo shao ci liao kan de shi hou jiu cong di e o fen zhong ku dao jie wei",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1779002748979,
+          "matched_rules": [],
+          "model_confidence": 0.003483520122244954
+        },
+        {
+          "reply_id": "2055904313612894218",
+          "author": "BtuTNy1",
+          "author_name": "在石頭下（Under my rock)™",
+          "original_text": "看過介紹，是一部有關早期潮汕人下南洋的故事。在東南亞應該有市場。。。",
+          "cleaned_pinyin": "zai shi tou xia : kan guo jie shao shi yi bu you guan zao qi chao shan ren xia nan yang de gu shi zai dong nan ya ying gai you shi chang",
+          "label": 0,
+          "source": "auto",
+          "extract_time": 1779002748979,
+          "matched_rules": [],
+          "model_confidence": 0.029487954452633858
+        },
+        {
+          "reply_id": "2055909646594879663",
+          "author": "MrsTaylorM74768",
+          "author_name": "晨妍寻固炮点击主页",
+          "original_text": "👏\n\n🧡\n\n🌃🎈\n\n🐬",
+          "cleaned_pinyin": "chen yan xun gu pao dian ji zhu ye : 👏 🧡 🌃 🎈 🐬",
+          "label": 1,
+          "source": "manual",
+          "extract_time": 1779002748979,
+          "matched_rules": [],
+          "model_confidence": 0.11029491573572159
+        }
+      ]
+    },
+    {
+      "thread_id": "2055894563378876738",
+      "main_post": {
+        "author": "mranti",
+        "text": "一年前，我有AI会抢夺大部分人工作的想法。现在，想法没变，但我觉得无法抢夺的人类工作也在扩大。你看完《给阿嫲的情书》，你还觉得这个片子在10年内会被AI视频低成本取代吗？你还觉得中文系的毕业生在AI时代一无是处吗？",
+        "timestamp": 1778998435000
+      },
+      "replies": [
+        {
+          "reply_id": "2055909702454665431",
+          "author": "LewisAmand46749",
+          "author_name": "静蕊寻固炮点击主页",
+          "original_text": "💛\n\n❣️\n\n😻\n\n🪐✨",
+          "cleaned_pinyin": "jing rui xun gu pao dian ji zhu ye : 💛 ❣️ 😻 🪐 ✨",
+          "label": 1,
+          "source": "manual",
+          "extract_time": 1779002530016,
+          "matched_rules": [],
+          "model_confidence": 0.2196882963180542
         }
       ]
     }

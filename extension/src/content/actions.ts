@@ -2,6 +2,8 @@ import { ACTION_BUTTON_CLASS } from '@/shared/constants';
 
 import { getActionBar } from '@/content/selectors';
 
+const actionButtonHandlers = new WeakMap<HTMLButtonElement, () => void>();
+
 interface ActionState {
   isSpam: boolean;
   isManual: boolean;
@@ -26,12 +28,26 @@ export function ensureActionButton(article: HTMLElement, state: ActionState, onT
     button.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
-      onToggle();
+      event.stopImmediatePropagation();
+      actionButtonHandlers.get(button!)?.();
     });
     actionBar.append(button);
   }
 
-  button.dataset.state = state.isSpam ? 'spam' : 'ham';
-  button.dataset.source = state.isManual ? 'manual' : 'auto';
-  button.textContent = state.isSpam ? '撤销屏蔽' : '屏蔽/标记 Spam';
+  actionButtonHandlers.set(button, onToggle);
+
+  const nextState = state.isSpam ? 'spam' : 'ham';
+  if (button.dataset.state !== nextState) {
+    button.dataset.state = nextState;
+  }
+
+  const nextSource = state.isManual ? 'manual' : 'auto';
+  if (button.dataset.source !== nextSource) {
+    button.dataset.source = nextSource;
+  }
+
+  const nextText = state.isSpam ? '撤销屏蔽' : '屏蔽/标记 Spam';
+  if (button.textContent !== nextText) {
+    button.textContent = nextText;
+  }
 }

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { applyCollapsedState, applyQueuedHiddenState, clearCollapsedState, clearQueuedHiddenState } from '@/content/collapser';
 
@@ -68,6 +68,49 @@ describe('collapser', () => {
     expect(host?.className).toBe('host');
     expect(host?.querySelector('.xcnspamshield-collapse-banner')).toBeNull();
     expect(article?.classList.contains('xcnspamshield-collapsed')).toBe(false);
+  });
+
+  it('reuses the banner controls and refreshes the queue callback across repeated scans', () => {
+    document.body.innerHTML = `
+      <div class="host">
+        <article data-testid="tweet">
+          <div data-testid="Tweet-User-Avatar">
+            <div data-testid="UserAvatar-Container-howell_kat4653"></div>
+          </div>
+          <div data-testid="User-Name">
+            <a href="/howell_kat4653"><span>晓萱~❀同城上门</span></a>
+            <a href="/howell_kat4653"><span>@howell_kat4653</span></a>
+          </div>
+        </article>
+      </div>
+    `;
+
+    const article = document.querySelector<HTMLElement>('article[data-testid="tweet"]');
+    const firstQueueHandler = vi.fn();
+    const secondQueueHandler = vi.fn();
+
+    applyCollapsedState(article!, '规则或模型命中', { onQueueBlock: firstQueueHandler });
+
+    const firstToggleButton = document.querySelector<HTMLButtonElement>('.xcnspamshield-collapse-banner-toggle');
+    const firstQueueButton = document.querySelector<HTMLButtonElement>('.xcnspamshield-collapse-banner-queue-button');
+
+    expect(firstToggleButton).not.toBeNull();
+    expect(firstQueueButton).not.toBeNull();
+
+    firstQueueButton!.click();
+    expect(firstQueueHandler).toHaveBeenCalledTimes(1);
+
+    applyCollapsedState(article!, '规则或模型命中', { onQueueBlock: secondQueueHandler });
+
+    const secondToggleButton = document.querySelector<HTMLButtonElement>('.xcnspamshield-collapse-banner-toggle');
+    const secondQueueButton = document.querySelector<HTMLButtonElement>('.xcnspamshield-collapse-banner-queue-button');
+
+    expect(secondToggleButton).toBe(firstToggleButton);
+    expect(secondQueueButton).toBe(firstQueueButton);
+
+    secondQueueButton!.click();
+    expect(firstQueueHandler).toHaveBeenCalledTimes(1);
+    expect(secondQueueHandler).toHaveBeenCalledTimes(1);
   });
 
   it('hides queued authors without keeping the collapse banner', () => {

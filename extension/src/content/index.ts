@@ -2,6 +2,7 @@ import '@/content/content.css';
 
 import { clearActionButton, ensureActionButton } from '@/content/actions';
 import { applyCollapsedState, applyQueuedHiddenState, clearCollapsedState, clearQueuedHiddenState } from '@/content/collapser';
+import { mutationsAffectOnlyInjectedUi } from '@/content/mutation-filter';
 import { cachedReplyResultFromRecord, ReplyResultCache, resolveCachedReplyResult, type CachedReplyResult } from '@/content/reply-result-cache';
 import { collectCurrentThread, toCollectedReply } from '@/content/extractor';
 import { collectParsedTweets, getLoadedTweetArticles, isStatusPage, type ParsedTweet } from '@/content/selectors';
@@ -84,7 +85,11 @@ async function handleExtraction(sendResponse: (response: CollectedThreadPayload 
 }
 
 function observeMutations(): void {
-  mutationObserver = new MutationObserver(() => {
+  mutationObserver = new MutationObserver((mutations) => {
+    if (mutationsAffectOnlyInjectedUi(mutations)) {
+      return;
+    }
+
     scheduleScan(THREAD_SCAN_DEBOUNCE_MS);
   });
 

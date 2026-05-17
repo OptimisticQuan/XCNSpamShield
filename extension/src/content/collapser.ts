@@ -4,6 +4,10 @@ const COLLAPSE_HOST_CLASS = 'xcnspamshield-collapse-host';
 const COLLAPSE_HOST_COLLAPSED_CLASS = 'xcnspamshield-collapse-host-collapsed';
 const COLLAPSE_HOST_EXPANDED_CLASS = 'xcnspamshield-collapse-host-expanded';
 const COLLAPSE_HOST_QUEUED_HIDDEN_CLASS = 'xcnspamshield-collapse-host-queued-hidden';
+const COLLAPSE_BANNER_TOGGLE_CLASS = 'xcnspamshield-collapse-banner-toggle';
+const COLLAPSE_BANNER_QUEUE_BUTTON_CLASS = 'xcnspamshield-collapse-banner-queue-button';
+
+const collapseBannerCallbacks = new WeakMap<HTMLElement, CollapseBannerOptions>();
 
 interface CollapseBannerOptions {
   onQueueBlock?: () => void;
@@ -111,69 +115,156 @@ function renderCollapseBannerContent(
     onQueueBlock?: () => void;
   },
 ): void {
-  const toggleButton = document.createElement('button');
-  toggleButton.type = 'button';
-  toggleButton.className = 'xcnspamshield-collapse-banner-toggle';
-  toggleButton.setAttribute('aria-expanded', String(options.expanded));
-  toggleButton.setAttribute('aria-label', options.expanded ? 'Spam 已展开，点击收起' : 'Spam 已折叠，点击展开');
-  toggleButton.addEventListener('click', () => {
-    const host = banner.parentElement;
-    if (!(host instanceof HTMLElement)) {
-      return;
-    }
+  collapseBannerCallbacks.set(banner, { onQueueBlock: options.onQueueBlock });
 
-    const expanded = host.dataset.xcnspamshieldExpanded === 'true';
-    host.dataset.xcnspamshieldExpanded = expanded ? 'false' : 'true';
-    syncCollapseBanner(host, banner, { onQueueBlock: options.onQueueBlock });
-  });
+  const { toggleButton, status, author, displayName, handle, detail } = ensureBannerToggleStructure(banner);
+  const queueButton = ensureQueueButton(banner);
 
-  const status = document.createElement('span');
-  status.className = 'xcnspamshield-collapse-banner-status';
-  status.textContent = options.expanded ? 'Spam 已展开 · 点击收起' : 'Spam 已折叠 · 点击展开';
-
-  const author = document.createElement('span');
-  author.className = 'xcnspamshield-collapse-banner-author';
-
-  const displayName = document.createElement('span');
-  displayName.className = 'xcnspamshield-collapse-banner-name';
-  displayName.textContent = options.displayName;
-  author.append(displayName);
-
-  if (options.handle) {
-    const handle = document.createElement('span');
-    handle.className = 'xcnspamshield-collapse-banner-handle';
-    handle.textContent = `@${options.handle}`;
-    author.append(handle);
+  const nextExpanded = String(options.expanded);
+  if (toggleButton.getAttribute('aria-expanded') !== nextExpanded) {
+    toggleButton.setAttribute('aria-expanded', nextExpanded);
   }
 
-  const detail = document.createElement('span');
-  detail.className = 'xcnspamshield-collapse-banner-detail';
-  detail.textContent = options.expanded
+  const nextToggleAriaLabel = options.expanded ? 'Spam 已展开，点击收起' : 'Spam 已折叠，点击展开';
+  if (toggleButton.getAttribute('aria-label') !== nextToggleAriaLabel) {
+    toggleButton.setAttribute('aria-label', nextToggleAriaLabel);
+  }
+
+  const nextStatusText = options.expanded ? 'Spam 已展开 · 点击收起' : 'Spam 已折叠 · 点击展开';
+  if (status.textContent !== nextStatusText) {
+    status.textContent = nextStatusText;
+  }
+
+  if (displayName.textContent !== options.displayName) {
+    displayName.textContent = options.displayName;
+  }
+
+  const nextHandleText = options.handle ? `@${options.handle}` : '';
+  if (handle.textContent !== nextHandleText) {
+    handle.textContent = nextHandleText;
+  }
+  handle.hidden = !options.handle;
+
+  const nextDetailText = options.expanded
     ? options.reason || '当前回复已展开，再次点击可收起。'
     : '当前回复已隐藏。';
+  if (detail.textContent !== nextDetailText) {
+    detail.textContent = nextDetailText;
+  }
 
-  toggleButton.replaceChildren(status, author, detail);
+  const nextQueueLabel = options.handle ? `将 @${options.handle} 加入拉黑队列` : '加入拉黑队列';
+  if (queueButton.getAttribute('aria-label') !== nextQueueLabel) {
+    queueButton.setAttribute('aria-label', nextQueueLabel);
+  }
+  if (queueButton.getAttribute('title') !== nextQueueLabel) {
+    queueButton.setAttribute('title', nextQueueLabel);
+  }
 
-  const queueButton = document.createElement('button');
-  queueButton.type = 'button';
-  queueButton.className = 'xcnspamshield-collapse-banner-queue-button';
-  queueButton.setAttribute('aria-label', options.handle ? `将 @${options.handle} 加入拉黑队列` : '加入拉黑队列');
-  queueButton.setAttribute('title', options.handle ? `将 @${options.handle} 加入拉黑队列` : '加入拉黑队列');
-  queueButton.innerHTML = [
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">',
-    '<path d="M15 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1"/>',
-    '<circle cx="9" cy="7" r="4"/>',
-    '<path d="M17 8h5"/>',
-    '<path d="M19.5 5.5v5"/>',
-    '</svg>',
-  ].join('');
-  queueButton.addEventListener('click', (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    options.onQueueBlock?.();
-  });
+  if (banner.children.length !== 2 || banner.firstElementChild !== toggleButton || banner.lastElementChild !== queueButton) {
+    banner.replaceChildren(toggleButton, queueButton);
+  }
+}
 
-  banner.replaceChildren(toggleButton, queueButton);
+function ensureBannerToggleStructure(banner: HTMLElement): {
+  toggleButton: HTMLButtonElement;
+  status: HTMLSpanElement;
+  author: HTMLSpanElement;
+  displayName: HTMLSpanElement;
+  handle: HTMLSpanElement;
+  detail: HTMLSpanElement;
+} {
+  let toggleButton = banner.querySelector<HTMLButtonElement>(`:scope > .${COLLAPSE_BANNER_TOGGLE_CLASS}`);
+  if (!toggleButton) {
+    toggleButton = document.createElement('button');
+    toggleButton.type = 'button';
+    toggleButton.className = COLLAPSE_BANNER_TOGGLE_CLASS;
+    toggleButton.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+
+      const host = banner.parentElement;
+      if (!(host instanceof HTMLElement)) {
+        return;
+      }
+
+      const expanded = host.dataset.xcnspamshieldExpanded === 'true';
+      host.dataset.xcnspamshieldExpanded = expanded ? 'false' : 'true';
+      syncCollapseBanner(host, banner, collapseBannerCallbacks.get(banner) ?? {});
+    });
+  }
+
+  let status = toggleButton.querySelector<HTMLSpanElement>(':scope > .xcnspamshield-collapse-banner-status');
+  if (!status) {
+    status = document.createElement('span');
+    status.className = 'xcnspamshield-collapse-banner-status';
+  }
+
+  let author = toggleButton.querySelector<HTMLSpanElement>(':scope > .xcnspamshield-collapse-banner-author');
+  if (!author) {
+    author = document.createElement('span');
+    author.className = 'xcnspamshield-collapse-banner-author';
+  }
+
+  let displayName = author.querySelector<HTMLSpanElement>(':scope > .xcnspamshield-collapse-banner-name');
+  if (!displayName) {
+    displayName = document.createElement('span');
+    displayName.className = 'xcnspamshield-collapse-banner-name';
+  }
+
+  let handle = author.querySelector<HTMLSpanElement>(':scope > .xcnspamshield-collapse-banner-handle');
+  if (!handle) {
+    handle = document.createElement('span');
+    handle.className = 'xcnspamshield-collapse-banner-handle';
+  }
+
+  if (author.children.length !== 2 || author.firstElementChild !== displayName || author.lastElementChild !== handle) {
+    author.replaceChildren(displayName, handle);
+  }
+
+  let detail = toggleButton.querySelector<HTMLSpanElement>(':scope > .xcnspamshield-collapse-banner-detail');
+  if (!detail) {
+    detail = document.createElement('span');
+    detail.className = 'xcnspamshield-collapse-banner-detail';
+  }
+
+  if (toggleButton.children.length !== 3 || toggleButton.children[0] !== status || toggleButton.children[1] !== author || toggleButton.children[2] !== detail) {
+    toggleButton.replaceChildren(status, author, detail);
+  }
+
+  return {
+    toggleButton,
+    status,
+    author,
+    displayName,
+    handle,
+    detail,
+  };
+}
+
+function ensureQueueButton(banner: HTMLElement): HTMLButtonElement {
+  let queueButton = banner.querySelector<HTMLButtonElement>(`:scope > .${COLLAPSE_BANNER_QUEUE_BUTTON_CLASS}`);
+  if (!queueButton) {
+    queueButton = document.createElement('button');
+    queueButton.type = 'button';
+    queueButton.className = COLLAPSE_BANNER_QUEUE_BUTTON_CLASS;
+    queueButton.innerHTML = [
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">',
+      '<path d="M15 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1"/>',
+      '<circle cx="9" cy="7" r="4"/>',
+      '<path d="M17 8h5"/>',
+      '<path d="M19.5 5.5v5"/>',
+      '</svg>',
+    ].join('');
+    queueButton.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      collapseBannerCallbacks.get(banner)?.onQueueBlock?.();
+    });
+  }
+
+  return queueButton;
 }
 
 function getReplyAuthorMeta(article: HTMLElement): { displayName: string; handle: string | null } {
