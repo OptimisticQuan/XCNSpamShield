@@ -1,1 +1,1 @@
-"""Export helpers for XSpamShield ML."""
+"""Export helpers for XCNSpamShield ML."""

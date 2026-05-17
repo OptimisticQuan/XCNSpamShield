@@ -1,16 +1,27 @@
-# XSpamShield
+# XCNSpamShield
 
-XSpamShield 是一个面向 X / Twitter 场景的中文 Spam 回复识别与屏蔽项目。
+XCNSpamShield 是一个面向 X / Twitter 场景的中文 Spam 回复识别与屏蔽项目。
 
 它的重点不是通用英文垃圾内容治理，而是针对中文、拼音、夹杂符号、谐音变体、混淆字符这类更常见于中文 Spam 回复的文本形态，提供识别、折叠、拉黑、复核、导出与再训练的完整闭环。
 
 ## 主要功能
 
 - 中文 Spam 回复识别：重点处理中文及其变体表达，包括拼音化、混淆字符、插入符号等常见绕过写法。
-- 页面内折叠与屏蔽：在 X 回复区自动折叠疑似 Spam，支持展开查看和手动改标。
+- 页面内折叠与屏蔽：在 X 回复区自动折叠疑似 Spam，支持展开查看、手动改标，以及在折叠条右侧一键把账号加入拉黑队列。
 - 后台拉黑队列：当同一账号累计达到阈值后，进入延迟执行的后台拉黑队列，降低接口风控风险。
 - Popup 管理面板：提供主页、拉黑队列、操作日志三类视图，便于本地审查和操作追踪。
 - 数据闭环：支持本地导出标注数据，重新训练模型，再导出回浏览器扩展使用。
+
+## 工作原理
+
+![XCNSpamShield TextCNN 架构图](docs/textcnn-architecture.svg)
+
+XCNSpamShield 的在线识别链路分为 4 步：
+
+1. 内容脚本在 X 帖子详情页提取当前可见回复，并把作者名与原始回复文本送到后台。
+2. 后台把文本归一化为 `cleaned_pinyin`，再编码成 `['[CLS]', ...tokens, '[SEP]']` 的长度 30 序列。
+3. 浏览器侧 TF.js 模型执行当前 TextCNN：`Embedding(64)` -> `Conv1D(k=2..5, 每支 32 filters)` -> `ReLU + masked max+mean pooling` -> `Concat 128` -> `Dropout(0.2)` -> `Linear` -> `Sigmoid`。
+4. 命中阈值的回复会被直接折叠；同一账号累计 3 条 Spam 回复会自动入队，或者也可以从折叠条右侧的小图标直接手动加入拉黑队列。入队作者的回复会在页面里直接隐藏。
 
 ## 项目结构
 
@@ -35,7 +46,7 @@ pnpm --dir extension build
 
 ```bash
 cd ml
-uv sync
+uv sync --extra export
 ```
 
 ### 3. 一键训练、评估、转码、导出
@@ -45,7 +56,7 @@ cd ml
 uv run train-eval-export
 ```
 
-`convert-tfjs` 会优先通过 `uvx` 隔离调用最新转换工具链，先尝试 `onnx2tf 2.4.0 + tensorflow 2.21.0`，若遇到当前上游包冲突，会自动回退到兼容的转换组合完成导出。
+当前导出链直接使用 `ml` 项目的 `export` extra，包含 `onnx2tf`、`tensorflow`、`tensorflowjs` 以及当前转换所需的补充运行时依赖。完整流程会自动完成训练、评估、ONNX 导出、TF.js 转换和模型回拷到扩展目录。
 
 常用拆分命令：
 

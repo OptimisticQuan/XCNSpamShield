@@ -3,9 +3,9 @@ requires = ["hatchling>=1.25.0"]
 build-backend = "hatchling.build"
 
 [project]
-name = "xspamshield-ml"
+name = "xcnspamshield-ml"
 version = "0.1.0"
-description = "Training and export pipeline for the XSpamShield pinyin-level TextCNN model."
+description = "Training and export pipeline for the XCNSpamShield pinyin-level TextCNN model."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

@@ -20,6 +20,8 @@ import type {
   ThreadRecord,
 } from '@/shared/types';
 
+const LEGACY_DB_NAME = 'xspamshield-db';
+
 interface ThreadStoreRecord extends ThreadRecord {
   createdAt: number;
 }
@@ -63,7 +65,7 @@ export interface AuthorSpamSummary {
   latestSpamExtractTime: number;
 }
 
-interface XSpamShieldDatabase extends DBSchema {
+interface XCNSpamShieldDatabase extends DBSchema {
   threads: {
     key: string;
     value: ThreadStoreRecord;
@@ -99,11 +101,11 @@ interface XSpamShieldDatabase extends DBSchema {
   };
 }
 
-let databasePromise: Promise<IDBPDatabase<XSpamShieldDatabase>> | undefined;
+let databasePromise: Promise<IDBPDatabase<XCNSpamShieldDatabase>> | undefined;
 
-function getDatabase(): Promise<IDBPDatabase<XSpamShieldDatabase>> {
+function getDatabase(): Promise<IDBPDatabase<XCNSpamShieldDatabase>> {
   if (!databasePromise) {
-    databasePromise = openDB<XSpamShieldDatabase>(DB_NAME, DB_VERSION, {
+    databasePromise = openDB<XCNSpamShieldDatabase>(DB_NAME, DB_VERSION, {
       upgrade(database, oldVersion, _newVersion, transaction) {
         if (oldVersion < 1) {
           database.createObjectStore('threads', { keyPath: 'threadId' });
@@ -144,10 +146,82 @@ function getDatabase(): Promise<IDBPDatabase<XSpamShieldDatabase>> {
           }
         }
       },
+    }).then(async (database) => {
+      await migrateLegacyDatabaseIfNeeded(database);
+      return database;
     });
   }
 
   return databasePromise;
+}
+
+async function migrateLegacyDatabaseIfNeeded(database: IDBPDatabase<XCNSpamShieldDatabase>): Promise<void> {
+  if (!(await legacyDatabaseExists()) || !(await isDatabaseEmpty(database))) {
+    return;
+  }
+
+  const legacyDatabase = await openDB<XCNSpamShieldDatabase>(LEGACY_DB_NAME);
+
+  try {
+    const [threads, replies, settings, blockQueue, blockLogs] = await Promise.all([
+      legacyDatabase.getAll('threads'),
+      legacyDatabase.getAll('replies'),
+      legacyDatabase.getAll('settings'),
+      legacyDatabase.getAll('blockQueue'),
+      legacyDatabase.getAll('blockLogs'),
+    ]);
+
+    if (threads.length + replies.length + settings.length + blockQueue.length + blockLogs.length === 0) {
+      return;
+    }
+
+    const transaction = database.transaction(['threads', 'replies', 'settings', 'blockQueue', 'blockLogs'], 'readwrite');
+
+    for (const thread of threads) {
+      await transaction.objectStore('threads').put(thread);
+    }
+
+    for (const reply of replies) {
+      await transaction.objectStore('replies').put(reply);
+    }
+
+    for (const setting of settings) {
+      await transaction.objectStore('settings').put(setting);
+    }
+
+    for (const queueItem of blockQueue) {
+      await transaction.objectStore('blockQueue').put(queueItem);
+    }
+
+    for (const logEntry of blockLogs) {
+      await transaction.objectStore('blockLogs').put(logEntry);
+    }
+
+    await transaction.done;
+  } finally {
+    legacyDatabase.close();
+  }
+}
+
+async function legacyDatabaseExists(): Promise<boolean> {
+  if (typeof indexedDB.databases !== 'function') {
+    return false;
+  }
+
+  const databases = await indexedDB.databases();
+  return databases.some((database) => database.name === LEGACY_DB_NAME);
+}
+
+async function isDatabaseEmpty(database: IDBPDatabase<XCNSpamShieldDatabase>): Promise<boolean> {
+  const counts = await Promise.all([
+    database.count('threads'),
+    database.count('replies'),
+    database.count('settings'),
+    database.count('blockQueue'),
+    database.count('blockLogs'),
+  ]);
+
+  return counts.every((count) => count === 0);
 }
 
 export async function getSettings(): Promise<ExtensionSettings> {

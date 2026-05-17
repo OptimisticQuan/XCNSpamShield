@@ -17,7 +17,7 @@ export default defineConfig({
     sourcemap: true,
     lib: {
       entry: path.resolve(root, 'src/content/index.ts'),
-      name: 'XSpamShieldContent',
+      name: 'XCNSpamShieldContent',
       formats: ['iife'],
       fileName: () => 'content.js',
     },

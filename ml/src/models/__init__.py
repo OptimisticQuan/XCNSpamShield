@@ -1,1 +1,1 @@
-"""Model definitions for XSpamShield ML."""
+"""Model definitions for XCNSpamShield ML."""

@@ -301,7 +301,7 @@ function renderHomeTab(
     <section class="panel toolbar-panel">
       <div class="toolbar-row">
         <div class="brand-row">
-          <h1>XSpamShield</h1>
+          <h1>XCNSpamShield</h1>
           <span class="mode-chip">${settings?.blockingEnabled ? '主动拦截' : '静默采集'}</span>
           <span class="meta compact-meta">${state.threadGroups.length} 个线程</span>
         </div>
@@ -799,7 +799,7 @@ async function downloadExportPayload(payload: ExportPayload): Promise<void> {
   try {
     await chrome.downloads.download({
       url,
-      filename: `xspamshield-export-${Date.now()}.json`,
+      filename: `xcnspamshield-export-${Date.now()}.json`,
       saveAs: true,
     });
   } finally {

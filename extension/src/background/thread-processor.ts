@@ -210,7 +210,7 @@ function logReplyDecisionTrace({
   }
 
   const logEndedAt = performance.now();
-  console.info('[XSpamShield][reply-decision]', {
+  console.info('[XCNSpamShield][reply-decision]', {
     requestId: traceContext.requestId,
     requestType: traceContext.requestType,
     replyCountInRequest: traceContext.replyCount,

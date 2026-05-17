@@ -1,0 +1,20 @@
+flowchart TD
+    A[Visible reply text] --> B[author_name + original_text\ncleaned_pinyin normalization]
+    B --> C[[[CLS] + tokens + [SEP]\nmax length = 30]]
+    C --> D[Embedding\nVocab x 64]
+    D --> E1[Conv1D k=2\n32 filters]
+    D --> E2[Conv1D k=3\n32 filters]
+    D --> E3[Conv1D k=4\n32 filters]
+    D --> E4[Conv1D k=5\n32 filters]
+    E1 --> F1[ReLU + masked\nmax+mean pooling]
+    E2 --> F2[ReLU + masked\nmax+mean pooling]
+    E3 --> F3[ReLU + masked\nmax+mean pooling]
+    E4 --> F4[ReLU + masked\nmax+mean pooling]
+    F1 --> G[Concat 128-d]
+    F2 --> G
+    F3 --> G
+    F4 --> G
+    G --> H[Dropout 0.2]
+    H --> I[Linear 128 -> 1]
+    I --> J[Sigmoid]
+    J --> K[Spam probability\nthreshold default = 0.5]

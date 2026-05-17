@@ -1,1 +1,1 @@
-"""Workflow helpers for the XSpamShield ML pipeline."""
+"""Workflow helpers for the XCNSpamShield ML pipeline."""

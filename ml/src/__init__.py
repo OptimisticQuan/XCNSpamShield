@@ -1,1 +1,1 @@
-"""Top-level package for XSpamShield ML."""
+"""Top-level package for XCNSpamShield ML."""

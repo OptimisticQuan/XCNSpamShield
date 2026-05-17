@@ -1,7 +1,7 @@
 import '@/content/content.css';
 
 import { clearActionButton, ensureActionButton } from '@/content/actions';
-import { applyCollapsedState, clearCollapsedState } from '@/content/collapser';
+import { applyCollapsedState, applyQueuedHiddenState, clearCollapsedState, clearQueuedHiddenState } from '@/content/collapser';
 import { cachedReplyResultFromRecord, ReplyResultCache, resolveCachedReplyResult, type CachedReplyResult } from '@/content/reply-result-cache';
 import { collectCurrentThread, toCollectedReply } from '@/content/extractor';
 import { collectParsedTweets, getLoadedTweetArticles, isStatusPage, type ParsedTweet } from '@/content/selectors';
@@ -11,13 +11,14 @@ import { isExtensionContextInvalidatedError, sendRuntimeMessage } from '@/shared
 import type { CollectedThreadPayload, ExtensionSettings, ReplyRecord } from '@/shared/types';
 
 declare global {
-  var __xspamshieldContentInitialized__: boolean | undefined;
+  var __xcnspamshieldContentInitialized__: boolean | undefined;
 }
 
 let currentSettings: ExtensionSettings | null = null;
 let scanTimeout: number | undefined;
 let scanFrameHandle: number | undefined;
 const replyResultCache = new ReplyResultCache();
+const queuedBlockAuthors = new Set<string>();
 const pendingStoredReplyIds = new Set<string>();
 const pendingInferenceReplyIds = new Set<string>();
 let bootstrapPromise: Promise<void> = Promise.resolve();
@@ -32,8 +33,8 @@ let contentContextActive = true;
 let scanInProgress = false;
 let rerunScanRequested = false;
 
-if (!globalThis.__xspamshieldContentInitialized__) {
-  globalThis.__xspamshieldContentInitialized__ = true;
+if (!globalThis.__xcnspamshieldContentInitialized__) {
+  globalThis.__xcnspamshieldContentInitialized__ = true;
   bootstrapPromise = bootstrap();
 
   chrome.runtime.onMessage.addListener((message: ContentRequest, _sender, sendResponse) => {
@@ -77,7 +78,7 @@ async function handleExtraction(sendResponse: (response: CollectedThreadPayload 
     await bootstrapPromise;
     sendResponse(collectCurrentThread());
   } catch (error) {
-    console.error('XSpamShield extraction failed', error);
+    console.error('XCNSpamShield extraction failed', error);
     sendResponse(null);
   }
 }
@@ -146,17 +147,35 @@ async function performScan(): Promise<void> {
   }
 
   const allowManualToggle = true;
-  const visibleTweets = collectParsedTweets({ visibleOnly: true });
-  const visibleMainTweet = visibleTweets.find((tweet) => tweet.tweetId === currentThreadId) ?? null;
-  const visibleReplies = visibleTweets.filter((tweet) => tweet.tweetId !== currentThreadId);
+  const loadedTweets = collectParsedTweets();
+  const visibleTweetIds = new Set(collectParsedTweets({ visibleOnly: true }).map((tweet) => tweet.tweetId));
+  const loadedMainTweet = loadedTweets.find((tweet) => tweet.tweetId === currentThreadId) ?? null;
+  const loadedReplies = loadedTweets.filter((tweet) => tweet.tweetId !== currentThreadId);
+  const visibleReplies = loadedReplies.filter((tweet) => visibleTweetIds.has(tweet.tweetId));
 
-  if (visibleMainTweet) {
-    clearActionButton(visibleMainTweet.article);
+  if (loadedMainTweet) {
+    clearActionButton(loadedMainTweet.article);
+  }
+
+  await refreshQueuedBlockAuthors(loadedReplies);
+
+  for (const tweet of loadedReplies) {
+    if (queuedBlockAuthors.has(normalizeAuthorHandle(tweet.author))) {
+      clearActionButton(tweet.article);
+      applyQueuedHiddenState(tweet.article);
+      continue;
+    }
+
+    clearQueuedHiddenState(tweet.article);
   }
 
   void warmVisibleReplyDecisions(currentThreadId, visibleReplies);
 
   for (const tweet of visibleReplies) {
+    if (queuedBlockAuthors.has(normalizeAuthorHandle(tweet.author))) {
+      continue;
+    }
+
     const decision = getCachedReplyDecision(tweet.tweetId);
     if (!decision) {
       continue;
@@ -165,12 +184,16 @@ async function performScan(): Promise<void> {
     const shouldCollapse = currentSettings.blockingEnabled && decision.label === 1;
 
     if (shouldCollapse) {
-      applyCollapsedState(tweet.article, getCollapseReason(decision));
+      applyCollapsedState(tweet.article, getCollapseReason(decision), {
+        onQueueBlock: () => {
+          void queueAuthorForBlock(tweet);
+        },
+      });
     } else {
       clearCollapsedState(tweet.article);
     }
 
-    const isExpandedSpam = shouldCollapse && tweet.article.dataset.xspamshieldExpanded === 'true';
+    const isExpandedSpam = shouldCollapse && tweet.article.dataset.xcnspamshieldExpanded === 'true';
 
     if (allowManualToggle && (!shouldCollapse || isExpandedSpam)) {
       ensureActionButton(tweet.article, { isSpam: decision.label === 1, isManual: decision.source === 'manual' }, () => {
@@ -179,6 +202,52 @@ async function performScan(): Promise<void> {
     } else {
       clearActionButton(tweet.article);
     }
+  }
+}
+
+async function refreshQueuedBlockAuthors(replies: ParsedTweet[]): Promise<void> {
+  const authors = Array.from(new Set(replies.map((tweet) => normalizeAuthorHandle(tweet.author)).filter(Boolean)));
+  if (authors.length === 0) {
+    queuedBlockAuthors.clear();
+    return;
+  }
+
+  const response = await sendContentRuntimeMessage({
+    type: 'GET_BLOCK_QUEUE_AUTHORS',
+    authors,
+  });
+
+  if (!response.ok) {
+    if (!isExtensionContextInvalidatedError(response.error)) {
+      console.error('XCNSpamShield lookup block queue authors failed', response.error);
+    }
+    return;
+  }
+
+  queuedBlockAuthors.clear();
+  for (const author of response.data ?? []) {
+    queuedBlockAuthors.add(normalizeAuthorHandle(author));
+  }
+}
+
+async function queueAuthorForBlock(tweet: ParsedTweet): Promise<void> {
+  const response = await sendContentRuntimeMessage({
+    type: 'QUEUE_BLOCK_AUTHOR',
+    author: tweet.author,
+    authorName: tweet.authorName,
+    replyId: tweet.tweetId,
+  });
+
+  if (!response.ok) {
+    if (!isExtensionContextInvalidatedError(response.error)) {
+      console.error('XCNSpamShield queue block author failed', response.error);
+    }
+    return;
+  }
+
+  if (response.data?.active) {
+    queuedBlockAuthors.add(normalizeAuthorHandle(tweet.author));
+    await runScan();
   }
 }
 
@@ -256,7 +325,7 @@ async function loadStoredReplies(replies: ParsedTweet[]): Promise<boolean> {
         return false;
       }
 
-      console.error('XSpamShield lookup stored replies failed', response.error);
+      console.error('XCNSpamShield lookup stored replies failed', response.error);
       return false;
     }
 
@@ -301,7 +370,7 @@ async function loadTransientReplies(threadId: string, replies: ParsedTweet[]): P
         return false;
       }
 
-      console.error('XSpamShield classify replies failed', response.error);
+      console.error('XCNSpamShield classify replies failed', response.error);
       return false;
     }
 
@@ -386,8 +455,8 @@ function syncFloatingCaptureCard(): void {
 
   const card = ensureFloatingCaptureCard();
   applyFloatingPosition(card);
-  const button = card.querySelector<HTMLButtonElement>('.xspamshield-floating-capture-button');
-  const message = card.querySelector<HTMLParagraphElement>('.xspamshield-floating-capture-message');
+  const button = card.querySelector<HTMLButtonElement>('.xcnspamshield-floating-capture-button');
+  const message = card.querySelector<HTMLParagraphElement>('.xcnspamshield-floating-capture-message');
 
   if (!button || !message) {
     return;
@@ -410,15 +479,15 @@ function ensureFloatingCaptureCard(): HTMLDivElement {
   card.id = FLOATING_CAPTURE_ROOT_ID;
   card.dataset.tone = captureTone;
   card.innerHTML = `
-    <p class="xspamshield-floating-capture-message"></p>
-    <div class="xspamshield-floating-capture-shell">
-      <button class="xspamshield-floating-drag-handle" type="button" aria-label="拖拽抓取按钮">⋮⋮</button>
-      <button class="xspamshield-floating-capture-button" type="button">抓取</button>
+    <p class="xcnspamshield-floating-capture-message"></p>
+    <div class="xcnspamshield-floating-capture-shell">
+      <button class="xcnspamshield-floating-drag-handle" type="button" aria-label="拖拽抓取按钮">⋮⋮</button>
+      <button class="xcnspamshield-floating-capture-button" type="button">抓取</button>
     </div>
   `;
 
-  const button = card.querySelector<HTMLButtonElement>('.xspamshield-floating-capture-button');
-  const dragHandle = card.querySelector<HTMLButtonElement>('.xspamshield-floating-drag-handle');
+  const button = card.querySelector<HTMLButtonElement>('.xcnspamshield-floating-capture-button');
+  const dragHandle = card.querySelector<HTMLButtonElement>('.xcnspamshield-floating-drag-handle');
   button?.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -630,8 +699,13 @@ function deactivateContentContext(): void {
 function clearInjectedTweetUi(): void {
   document.querySelectorAll(`.${ACTION_BUTTON_CLASS}`).forEach((button) => button.remove());
   for (const article of getLoadedTweetArticles()) {
+    clearQueuedHiddenState(article);
     clearCollapsedState(article);
   }
+}
+
+function normalizeAuthorHandle(author: string): string {
+  return author.replace(/^@+/u, '').trim().toLowerCase();
 }
 
 function getCachedReplyDecision(replyId: string): CachedReplyResult | undefined {

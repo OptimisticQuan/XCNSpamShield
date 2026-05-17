@@ -1,71 +1,87 @@
 import { COLLAPSED_CLASS, PLACEHOLDER_BANNER_CLASS } from '@/shared/constants';
 
-const COLLAPSE_HOST_CLASS = 'xspamshield-collapse-host';
-const COLLAPSE_HOST_COLLAPSED_CLASS = 'xspamshield-collapse-host-collapsed';
-const COLLAPSE_HOST_EXPANDED_CLASS = 'xspamshield-collapse-host-expanded';
+const COLLAPSE_HOST_CLASS = 'xcnspamshield-collapse-host';
+const COLLAPSE_HOST_COLLAPSED_CLASS = 'xcnspamshield-collapse-host-collapsed';
+const COLLAPSE_HOST_EXPANDED_CLASS = 'xcnspamshield-collapse-host-expanded';
+const COLLAPSE_HOST_QUEUED_HIDDEN_CLASS = 'xcnspamshield-collapse-host-queued-hidden';
 
-export function applyCollapsedState(article: HTMLElement, reason: string): void {
+interface CollapseBannerOptions {
+  onQueueBlock?: () => void;
+}
+
+export function applyCollapsedState(article: HTMLElement, reason: string, options: CollapseBannerOptions = {}): void {
   const host = getCollapseHost(article);
-  host.dataset.xspamshieldCollapseReason = reason;
-  let banner = host.querySelector<HTMLButtonElement>(`:scope > .${PLACEHOLDER_BANNER_CLASS}`);
+  host.dataset.xcnspamshieldCollapseReason = reason;
+  host.classList.remove(COLLAPSE_HOST_QUEUED_HIDDEN_CLASS);
+  delete host.dataset.xcnspamshieldQueuedHidden;
+  delete article.dataset.xcnspamshieldQueuedHidden;
+  let banner = host.querySelector<HTMLElement>(`:scope > .${PLACEHOLDER_BANNER_CLASS}`);
 
   if (!banner) {
-    banner = document.createElement('button');
-    banner.type = 'button';
+    banner = document.createElement('div');
     banner.className = PLACEHOLDER_BANNER_CLASS;
-    banner.addEventListener('click', () => {
-      const expanded = host.dataset.xspamshieldExpanded === 'true';
-      host.dataset.xspamshieldExpanded = expanded ? 'false' : 'true';
-      syncCollapseBanner(host, banner!);
-    });
     host.prepend(banner);
   }
 
-  syncCollapseBanner(host, banner);
+  syncCollapseBanner(host, banner, options);
 }
 
 export function clearCollapsedState(article: HTMLElement): void {
   const host = getCollapseHost(article);
   host.classList.remove(COLLAPSE_HOST_CLASS, COLLAPSE_HOST_COLLAPSED_CLASS, COLLAPSE_HOST_EXPANDED_CLASS);
-  delete host.dataset.xspamshieldExpanded;
-  delete host.dataset.xspamshieldCollapsed;
-  delete host.dataset.xspamshieldCollapseReason;
+  delete host.dataset.xcnspamshieldExpanded;
+  delete host.dataset.xcnspamshieldCollapsed;
+  delete host.dataset.xcnspamshieldCollapseReason;
   host.querySelector(`:scope > .${PLACEHOLDER_BANNER_CLASS}`)?.remove();
 
   article.classList.remove(COLLAPSED_CLASS);
-  article.dataset.xspamshieldCollapsed = 'false';
-  delete article.dataset.xspamshieldExpanded;
-  delete article.dataset.xspamshieldCollapseReason;
+  article.dataset.xcnspamshieldCollapsed = 'false';
+  delete article.dataset.xcnspamshieldExpanded;
+  delete article.dataset.xcnspamshieldCollapseReason;
 }
 
-function syncCollapseBanner(host: HTMLElement, banner: HTMLButtonElement): void {
+export function applyQueuedHiddenState(article: HTMLElement): void {
+  clearCollapsedState(article);
+
+  const host = getCollapseHost(article);
+  host.classList.add(COLLAPSE_HOST_QUEUED_HIDDEN_CLASS);
+  host.dataset.xcnspamshieldQueuedHidden = 'true';
+  article.dataset.xcnspamshieldQueuedHidden = 'true';
+}
+
+export function clearQueuedHiddenState(article: HTMLElement): void {
+  const host = getCollapseHost(article);
+  host.classList.remove(COLLAPSE_HOST_QUEUED_HIDDEN_CLASS);
+  delete host.dataset.xcnspamshieldQueuedHidden;
+  delete article.dataset.xcnspamshieldQueuedHidden;
+}
+
+function syncCollapseBanner(host: HTMLElement, banner: HTMLElement, options: CollapseBannerOptions): void {
   const article = getHostArticle(host);
-  const expanded = host.dataset.xspamshieldExpanded === 'true';
-  const reason = formatCollapseReason(host.dataset.xspamshieldCollapseReason ?? '');
+  const expanded = host.dataset.xcnspamshieldExpanded === 'true';
+  const reason = formatCollapseReason(host.dataset.xcnspamshieldCollapseReason ?? '');
   const authorMeta = article ? getReplyAuthorMeta(article) : { displayName: '未知用户', handle: null };
 
   host.classList.add(COLLAPSE_HOST_CLASS);
   host.classList.toggle(COLLAPSE_HOST_COLLAPSED_CLASS, !expanded);
   host.classList.toggle(COLLAPSE_HOST_EXPANDED_CLASS, expanded);
-  host.dataset.xspamshieldCollapsed = expanded ? 'false' : 'true';
+  host.dataset.xcnspamshieldCollapsed = expanded ? 'false' : 'true';
 
   if (article) {
     article.classList.toggle(COLLAPSED_CLASS, !expanded);
-    article.dataset.xspamshieldCollapsed = expanded ? 'false' : 'true';
-    article.dataset.xspamshieldExpanded = expanded ? 'true' : 'false';
-    article.dataset.xspamshieldCollapseReason = host.dataset.xspamshieldCollapseReason ?? '';
+    article.dataset.xcnspamshieldCollapsed = expanded ? 'false' : 'true';
+    article.dataset.xcnspamshieldExpanded = expanded ? 'true' : 'false';
+    article.dataset.xcnspamshieldCollapseReason = host.dataset.xcnspamshieldCollapseReason ?? '';
   }
 
   banner.dataset.state = expanded ? 'expanded' : 'collapsed';
-  banner.setAttribute('aria-expanded', String(expanded));
-  banner.setAttribute('aria-label', expanded ? 'Spam 已展开，点击收起' : 'Spam 已折叠，点击展开');
-  banner.removeAttribute('title');
 
   renderCollapseBannerContent(banner, {
     expanded,
     reason,
     displayName: authorMeta.displayName,
     handle: authorMeta.handle,
+    onQueueBlock: options.onQueueBlock,
   });
 }
 
@@ -86,40 +102,78 @@ function getHostArticle(host: HTMLElement): HTMLElement | null {
 }
 
 function renderCollapseBannerContent(
-  banner: HTMLButtonElement,
+  banner: HTMLElement,
   options: {
     expanded: boolean;
     reason: string;
     displayName: string;
     handle: string | null;
+    onQueueBlock?: () => void;
   },
 ): void {
+  const toggleButton = document.createElement('button');
+  toggleButton.type = 'button';
+  toggleButton.className = 'xcnspamshield-collapse-banner-toggle';
+  toggleButton.setAttribute('aria-expanded', String(options.expanded));
+  toggleButton.setAttribute('aria-label', options.expanded ? 'Spam 已展开，点击收起' : 'Spam 已折叠，点击展开');
+  toggleButton.addEventListener('click', () => {
+    const host = banner.parentElement;
+    if (!(host instanceof HTMLElement)) {
+      return;
+    }
+
+    const expanded = host.dataset.xcnspamshieldExpanded === 'true';
+    host.dataset.xcnspamshieldExpanded = expanded ? 'false' : 'true';
+    syncCollapseBanner(host, banner, { onQueueBlock: options.onQueueBlock });
+  });
+
   const status = document.createElement('span');
-  status.className = 'xspamshield-collapse-banner-status';
+  status.className = 'xcnspamshield-collapse-banner-status';
   status.textContent = options.expanded ? 'Spam 已展开 · 点击收起' : 'Spam 已折叠 · 点击展开';
 
   const author = document.createElement('span');
-  author.className = 'xspamshield-collapse-banner-author';
+  author.className = 'xcnspamshield-collapse-banner-author';
 
   const displayName = document.createElement('span');
-  displayName.className = 'xspamshield-collapse-banner-name';
+  displayName.className = 'xcnspamshield-collapse-banner-name';
   displayName.textContent = options.displayName;
   author.append(displayName);
 
   if (options.handle) {
     const handle = document.createElement('span');
-    handle.className = 'xspamshield-collapse-banner-handle';
+    handle.className = 'xcnspamshield-collapse-banner-handle';
     handle.textContent = `@${options.handle}`;
     author.append(handle);
   }
 
   const detail = document.createElement('span');
-  detail.className = 'xspamshield-collapse-banner-detail';
+  detail.className = 'xcnspamshield-collapse-banner-detail';
   detail.textContent = options.expanded
     ? options.reason || '当前回复已展开，再次点击可收起。'
     : '当前回复已隐藏。';
 
-  banner.replaceChildren(status, author, detail);
+  toggleButton.replaceChildren(status, author, detail);
+
+  const queueButton = document.createElement('button');
+  queueButton.type = 'button';
+  queueButton.className = 'xcnspamshield-collapse-banner-queue-button';
+  queueButton.setAttribute('aria-label', options.handle ? `将 @${options.handle} 加入拉黑队列` : '加入拉黑队列');
+  queueButton.setAttribute('title', options.handle ? `将 @${options.handle} 加入拉黑队列` : '加入拉黑队列');
+  queueButton.innerHTML = [
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">',
+    '<path d="M15 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1"/>',
+    '<circle cx="9" cy="7" r="4"/>',
+    '<path d="M17 8h5"/>',
+    '<path d="M19.5 5.5v5"/>',
+    '</svg>',
+  ].join('');
+  queueButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    options.onQueueBlock?.();
+  });
+
+  banner.replaceChildren(toggleButton, queueButton);
 }
 
 function getReplyAuthorMeta(article: HTMLElement): { displayName: string; handle: string | null } {

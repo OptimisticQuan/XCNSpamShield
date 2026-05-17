@@ -40,6 +40,67 @@ export async function refreshAutoBlockQueueForAuthors(authors: string[]): Promis
   await scheduleBlockQueueAlarm();
 }
 
+export async function getQueuedBlockAuthors(authors: string[]): Promise<string[]> {
+  const uniqueAuthors = Array.from(new Set(authors.map(normalizeAuthor).filter(Boolean)));
+  if (uniqueAuthors.length === 0) {
+    return [];
+  }
+
+  const queueItems = await Promise.all(uniqueAuthors.map((author) => getBlockQueueItem(author)));
+  return uniqueAuthors.filter((author, index) => queueItems[index]?.action === 'block');
+}
+
+export async function queueBlockAuthor(
+  author: string,
+  authorName?: string,
+  replyId?: string,
+): Promise<{ queued: boolean; active: boolean; action: 'queued' | 'already-queued' | 'replaced-unblock' | 'noop' }> {
+  const normalizedAuthor = normalizeAuthor(author);
+  if (!normalizedAuthor) {
+    return { queued: false, active: false, action: 'noop' };
+  }
+
+  const existing = await getBlockQueueItem(normalizedAuthor);
+  if (existing?.action === 'block') {
+    await putBlockQueueItem({
+      ...existing,
+      authorName: authorName || existing.authorName,
+      updatedAt: Date.now(),
+    });
+    return { queued: false, active: true, action: 'already-queued' };
+  }
+
+  if (existing?.action === 'unblock') {
+    await cancelBlockQueueAuthor(normalizedAuthor);
+  }
+
+  const latestSuccessfulLog = await getLatestSuccessfulBlockLog(normalizedAuthor);
+  if (latestSuccessfulLog?.action === 'block') {
+    return { queued: false, active: false, action: 'noop' };
+  }
+
+  const summary = await getAuthorSpamSummary(normalizedAuthor);
+  const queuedAt = Date.now();
+  await putBlockQueueItem({
+    author: normalizedAuthor,
+    authorName: authorName || summary?.authorName || normalizedAuthor,
+    action: 'block',
+    state: 'queued',
+    queuedAt,
+    updatedAt: queuedAt,
+    nextRunAt: await reserveNextRunAt(queuedAt),
+    attemptCount: 0,
+    spamReplyCount: summary?.spamReplyCount ?? 1,
+    spamReplyIds: summary?.spamReplyIds ?? (replyId ? [replyId] : []),
+  });
+  await scheduleBlockQueueAlarm();
+  return {
+    queued: true,
+    active: true,
+    action: existing?.action === 'unblock' ? 'replaced-unblock' : 'queued',
+  };
+}
+
 export async function cancelBlockQueueAuthor(author: string): Promise<boolean> {
   const normalizedAuthor = normalizeAuthor(author);
   if (!normalizedAuthor) {

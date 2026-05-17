@@ -1,4 +1,4 @@
-# XSpamShield Extension
+# XCNSpamShield Extension
 
 Manifest V3 extension built with TypeScript and Vite.
 

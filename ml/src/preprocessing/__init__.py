@@ -1,1 +1,1 @@
-"""Preprocessing helpers for XSpamShield ML."""
+"""Preprocessing helpers for XCNSpamShield ML."""

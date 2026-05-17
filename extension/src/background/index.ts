@@ -1,7 +1,9 @@
 import {
   cancelBlockQueueAuthor,
   getBlockingOverviewData,
+  getQueuedBlockAuthors,
   initializeBlockQueueProcessing,
+  queueBlockAuthor,
   queueUnblockAuthor,
   refreshAutoBlockQueueForAuthors,
 } from '@/background/block-queue';
@@ -47,6 +49,8 @@ async function handleRuntimeMessage(message: RuntimeRequest): Promise<RuntimeRes
       return success(await getSettings());
     case 'GET_BLOCKING_OVERVIEW':
       return success(await getBlockingOverviewData(message.queuePage, message.logPage, message.pageSize));
+    case 'GET_BLOCK_QUEUE_AUTHORS':
+      return success(await getQueuedBlockAuthors(message.authors));
     case 'SET_BLOCKING': {
       const settings = await setBlockingEnabled(message.enabled);
       await broadcastSettings(settings);
@@ -144,6 +148,10 @@ async function handleRuntimeMessage(message: RuntimeRequest): Promise<RuntimeRes
       return success(await lookupReplyRecords(message.replyIds));
     case 'GET_REPLY_RECORD':
       return success(await getReplyRecord(message.replyId));
+    case 'QUEUE_BLOCK_AUTHOR': {
+      const result = await queueBlockAuthor(message.author, message.authorName, message.replyId);
+      return success({ author: message.author, ...result });
+    }
     case 'CANCEL_BLOCK_QUEUE_AUTHOR': {
       const cancelled = await cancelBlockQueueAuthor(message.author);
       return success({ author: message.author, cancelled });
@@ -221,7 +229,7 @@ async function lookupReplyRecords(replyIds: string[]): Promise<ReplyRecord[]> {
     }
   }
 
-  console.info('[XSpamShield][reply-record-lookup]', {
+  console.info('[XCNSpamShield][reply-record-lookup]', {
     requestedReplyCount: replyIds.length,
     matchedReplyCount: replies.length,
     durationMs: roundDuration(performance.now() - lookupStartedAt),
@@ -331,7 +339,7 @@ function createReplyDecisionTraceContext(requestType: string, replyCount: number
 }
 
 function logReplyDecisionRequestStart(traceContext: ReplyDecisionTraceContext): void {
-  console.info('[XSpamShield][reply-decision-request:start]', {
+  console.info('[XCNSpamShield][reply-decision-request:start]', {
     requestId: traceContext.requestId,
     requestType: traceContext.requestType,
     replyCount: traceContext.replyCount,
@@ -342,7 +350,7 @@ function logReplyDecisionRequestEnd(
   traceContext: ReplyDecisionTraceContext,
   details: Record<string, unknown>,
 ): void {
-  console.info('[XSpamShield][reply-decision-request:end]', {
+  console.info('[XCNSpamShield][reply-decision-request:end]', {
     requestId: traceContext.requestId,
     requestType: traceContext.requestType,
     replyCount: traceContext.replyCount,

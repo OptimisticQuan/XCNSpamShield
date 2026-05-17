@@ -1,1 +1,1 @@
-"""Training utilities for XSpamShield ML."""
+"""Training utilities for XCNSpamShield ML."""
