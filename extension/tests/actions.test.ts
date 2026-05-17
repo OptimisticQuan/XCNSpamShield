@@ -2,7 +2,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { ensureActionButton } from '@/content/actions';
+import { clearActionButton, ensureActionButton } from '@/content/actions';
 
 describe('actions', () => {
   it('reuses the injected action button and updates the click handler between scans', () => {
@@ -32,5 +32,22 @@ describe('actions', () => {
     secondButton!.click();
     expect(firstHandler).toHaveBeenCalledTimes(1);
     expect(secondHandler).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes stale injected buttons regardless of which action group they are attached to', () => {
+    document.body.innerHTML = `
+      <article data-testid="tweet">
+        <div role="group"></div>
+        <div role="group">
+          <button type="button" class="xcnspamshield-action-button">撤销屏蔽</button>
+        </div>
+      </article>
+    `;
+
+    const article = document.querySelector<HTMLElement>('article[data-testid="tweet"]');
+
+    clearActionButton(article!);
+
+    expect(article?.querySelector('.xcnspamshield-action-button')).toBeNull();
   });
 });

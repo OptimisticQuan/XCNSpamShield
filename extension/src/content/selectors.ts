@@ -39,16 +39,17 @@ export function isStatusPage(): boolean {
 }
 
 export function parseTweetArticle(article: HTMLElement): ParsedTweet | null {
-  const cachedTweet = parsedTweetCache.get(article);
-  if (cachedTweet) {
-    return cachedTweet;
-  }
-
   const statusLink = findStatusLink(article);
   const tweetId = extractTweetId(statusLink?.href ?? '');
 
   if (!statusLink || !tweetId) {
+    parsedTweetCache.delete(article);
     return null;
+  }
+
+  const cachedTweet = parsedTweetCache.get(article);
+  if (cachedTweet?.tweetId === tweetId) {
+    return cachedTweet;
   }
 
   const tweetTextNode = queryOwnTweetElement<HTMLElement>(article, 'div[data-testid="tweetText"]');

@@ -10,8 +10,7 @@ interface ActionState {
 }
 
 export function clearActionButton(article: HTMLElement): void {
-  const actionBar = getActionBar(article);
-  actionBar?.querySelector(`.${ACTION_BUTTON_CLASS}`)?.remove();
+  article.querySelectorAll(`.${ACTION_BUTTON_CLASS}`).forEach((button) => button.remove());
 }
 
 export function ensureActionButton(article: HTMLElement, state: ActionState, onToggle: () => void): void {
@@ -20,7 +19,10 @@ export function ensureActionButton(article: HTMLElement, state: ActionState, onT
     return;
   }
 
-  let button = actionBar.querySelector<HTMLButtonElement>(`.${ACTION_BUTTON_CLASS}`);
+  const existingButtons = Array.from(article.querySelectorAll<HTMLButtonElement>(`.${ACTION_BUTTON_CLASS}`));
+  let button = existingButtons.shift() ?? null;
+  existingButtons.forEach((extraButton) => extraButton.remove());
+
   if (!button) {
     button = document.createElement('button');
     button.type = 'button';
@@ -31,6 +33,9 @@ export function ensureActionButton(article: HTMLElement, state: ActionState, onT
       event.stopImmediatePropagation();
       actionButtonHandlers.get(button!)?.();
     });
+  }
+
+  if (button.parentElement !== actionBar) {
     actionBar.append(button);
   }
 

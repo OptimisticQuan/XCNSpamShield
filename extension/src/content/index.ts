@@ -176,13 +176,15 @@ async function performScan(): Promise<void> {
 
   void warmVisibleReplyDecisions(currentThreadId, visibleReplies);
 
-  for (const tweet of visibleReplies) {
+  for (const tweet of loadedReplies) {
     if (queuedBlockAuthors.has(normalizeAuthorHandle(tweet.author))) {
       continue;
     }
 
     const decision = getCachedReplyDecision(tweet.tweetId);
     if (!decision) {
+      clearCollapsedState(tweet.article);
+      clearActionButton(tweet.article);
       continue;
     }
 

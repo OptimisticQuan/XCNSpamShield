@@ -172,4 +172,60 @@ describe('selectors', () => {
       text: 'main post content',
     });
   });
+
+  it('refreshes the parsed tweet when a virtualized article DOM node is reused for another status', () => {
+    document.body.innerHTML = `
+      <main>
+        <section data-testid="primaryColumn">
+          <article data-testid="tweet">
+            <div data-testid="Tweet-User-Avatar">
+              <div data-testid="UserAvatar-Container-first_user"></div>
+            </div>
+            <div data-testid="User-Name">
+              <a href="/first_user"><span>第一个用户</span></a>
+              <a href="/first_user"><span>@first_user</span></a>
+            </div>
+            <div data-testid="tweetText">first content</div>
+            <a href="https://x.com/first_user/status/1111111111">
+              <time datetime="2025-05-15T11:00:00.000Z"></time>
+            </a>
+          </article>
+        </section>
+      </main>
+    `;
+
+    const article = document.querySelector<HTMLElement>('article[data-testid="tweet"]');
+    expect(article).not.toBeNull();
+
+    const firstParsed = parseTweetArticle(article!);
+    expect(firstParsed).toMatchObject({
+      tweetId: '1111111111',
+      author: 'first_user',
+      authorName: '第一个用户',
+      text: 'first content',
+    });
+
+    article!.innerHTML = `
+      <div data-testid="Tweet-User-Avatar">
+        <div data-testid="UserAvatar-Container-second_user"></div>
+      </div>
+      <div data-testid="User-Name">
+        <a href="/second_user"><span>第二个用户</span></a>
+        <a href="/second_user"><span>@second_user</span></a>
+      </div>
+      <div data-testid="tweetText">second content</div>
+      <a href="https://x.com/second_user/status/2222222222">
+        <time datetime="2025-05-15T12:00:00.000Z"></time>
+      </a>
+    `;
+
+    const secondParsed = parseTweetArticle(article!);
+    expect(secondParsed).toMatchObject({
+      tweetId: '2222222222',
+      author: 'second_user',
+      authorName: '第二个用户',
+      text: 'second content',
+      timestamp: Date.parse('2025-05-15T12:00:00.000Z'),
+    });
+  });
 });
