@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -15,24 +17,26 @@ def main() -> None:
     parser.add_argument('--vocab', default='data/vocab.txt', help='Optional vocab.txt to copy next to the TF.js model.')
     args = parser.parse_args()
 
-    ensure_command('onnx2tf')
-    ensure_command('tensorflowjs_converter')
+    ensure_module('onnx2tf')
+    ensure_module('tensorflowjs')
 
     saved_model_dir = Path(args.saved_model_dir)
     output_dir = Path(args.output_dir)
     saved_model_dir.parent.mkdir(parents=True, exist_ok=True)
     output_dir.parent.mkdir(parents=True, exist_ok=True)
 
-    subprocess.run(['onnx2tf', '-i', args.onnx, '-o', str(saved_model_dir)], check=True)
+    subprocess.run(build_module_command('onnx2tf', ['-i', args.onnx, '-o', str(saved_model_dir)]), check=True)
     converter_env = build_tensorflowjs_converter_env()
     subprocess.run(
-        [
-            'tensorflowjs_converter',
-            '--input_format=tf_saved_model',
-            '--output_format=tfjs_graph_model',
-            str(saved_model_dir),
-            str(output_dir),
-        ],
+        build_module_command(
+            'tensorflowjs.converters.converter',
+            [
+                '--input_format=tf_saved_model',
+                '--output_format=tfjs_graph_model',
+                str(saved_model_dir),
+                str(output_dir),
+            ],
+        ),
         check=True,
         env=converter_env,
     )
@@ -44,10 +48,17 @@ def main() -> None:
     print(f'Wrote TF.js model to {output_dir}')
 
 
-def ensure_command(command: str) -> None:
-    if shutil.which(command):
+def ensure_module(module_name: str) -> None:
+    if importlib.util.find_spec(module_name):
         return
-    raise SystemExit(f'{command} was not found on PATH. Install the export dependencies first.')
+    raise SystemExit(
+        f'{module_name} is not installed in the current environment. '
+        'Install the export dependencies first with `uv sync --extra export`.'
+    )
+
+
+def build_module_command(module_name: str, args: list[str]) -> list[str]:
+    return [sys.executable, '-m', module_name, *args]
 
 
 def build_tensorflowjs_converter_env() -> dict[str, str]:

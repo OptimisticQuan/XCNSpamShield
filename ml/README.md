@@ -14,6 +14,7 @@ uv run export-onnx --checkpoint outputs/checkpoints/best.pt
 uv run convert-tfjs --onnx outputs/onnx/spam_model.onnx --output-dir outputs/tfjs_model
 uv run compare-backends --dataset data/processed/dataset.jsonl --checkpoint outputs/checkpoints/best.pt --onnx outputs/onnx/spam_model.onnx
 uv run train-eval-export
+uv run export-deploy
 ```
 
 ## Data flow

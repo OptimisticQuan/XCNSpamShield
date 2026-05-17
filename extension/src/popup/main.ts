@@ -359,6 +359,7 @@ function renderHomeTab(
 function renderBlockingTab(view: Exclude<PopupTab, 'home'>, blockingOverview: BlockingOverview): string {
   const isQueueView = view === 'queue';
   const activePage = isQueueView ? blockingOverview.queue : blockingOverview.logs;
+  const showPagination = activePage.totalPages > 1;
   const listMarkup = isQueueView
     ? renderBlockQueueList(blockingOverview.queue.items)
     : renderBlockLogList(blockingOverview.logs.items);
@@ -388,21 +389,23 @@ function renderBlockingTab(view: Exclude<PopupTab, 'home'>, blockingOverview: Bl
       <div class="blocking-list">
         ${state.loading ? '<p class="empty-state">正在加载任务状态...</p>' : listMarkup}
       </div>
-      <div class="blocking-pagination">
+      ${showPagination
+        ? `<div class="blocking-pagination">
         <button
           class="secondary micro-button"
           type="button"
           data-action="${isQueueView ? 'prev-queue-page' : 'prev-log-page'}"
           ${activePage.page <= 1 ? 'disabled' : ''}
         >上一页</button>
-        <span class="meta compact-meta">第 ${activePage.page} / ${activePage.totalPages} 页 · 共 ${activePage.total} 条</span>
+        <span class="blocking-pagination-summary">第 ${activePage.page} / ${activePage.totalPages} 页 · 共 ${activePage.total} 条</span>
         <button
           class="secondary micro-button"
           type="button"
           data-action="${isQueueView ? 'next-queue-page' : 'next-log-page'}"
           ${activePage.page >= activePage.totalPages ? 'disabled' : ''}
         >下一页</button>
-      </div>
+      </div>`
+        : ''}
     </section>
   `;
 }

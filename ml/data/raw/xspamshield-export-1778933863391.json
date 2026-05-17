@@ -622,7 +622,7 @@
           "author_name": "Katalina",
           "original_text": "简中算这个还有算错的？",
           "cleaned_pinyin": "ka ta lin a : jian zhong suan zhe ge hai you suan cuo de",
-          "label": 1,
+          "label": 0,
           "source": "auto",
           "extract_time": 1778933650962,
           "matched_rules": [],
@@ -3218,7 +3218,7 @@
           "author_name": "薄荷糖",
           "original_text": "刚分手想被爱52eF",
           "cleaned_pinyin": "bao he tang : gang fen shou xiang bei ai",
-          "label": 0,
+          "label": 1,
           "source": "auto",
           "extract_time": 1778933426422,
           "matched_rules": []
@@ -3241,7 +3241,7 @@
           "author_name": "陌心",
           "original_text": "刚分手想被爱74xA",
           "cleaned_pinyin": "mo xin : gang fen shou xiang bei ai",
-          "label": 0,
+          "label": 1,
           "source": "auto",
           "extract_time": 1778933426422,
           "matched_rules": []
@@ -6015,7 +6015,7 @@
           "author_name": "柠檬",
           "original_text": "想找会疼人的哥哥69lE",
           "cleaned_pinyin": "ning meng : xiang zhao hui teng ren de ge ge",
-          "label": 0,
+          "label": 1,
           "source": "auto",
           "extract_time": 1778933319242,
           "matched_rules": []
@@ -6026,7 +6026,7 @@
           "author_name": "风铃响",
           "original_text": "刚分手想被爱‍51iZ",
           "cleaned_pinyin": "feng ling xiang : gang fen shou xiang bei ai",
-          "label": 0,
+          "label": 1,
           "source": "auto",
           "extract_time": 1778933319242,
           "matched_rules": []
@@ -6125,7 +6125,7 @@
           "author_name": "晴栀",
           "original_text": "D.D个线下的哥哥18gD",
           "cleaned_pinyin": "qing zhi : ge xian xia de ge ge",
-          "label": 0,
+          "label": 1,
           "source": "auto",
           "extract_time": 1778933319242,
           "matched_rules": []
@@ -6136,7 +6136,7 @@
           "author_name": "陌心",
           "original_text": "想找会疼人的哥哥93bF",
           "cleaned_pinyin": "mo xin : xiang zhao hui teng ren de ge ge",
-          "label": 0,
+          "label": 1,
           "source": "auto",
           "extract_time": 1778933319242,
           "matched_rules": []
@@ -6169,7 +6169,7 @@
           "author_name": "绵绵",
           "original_text": "D.D个线下的哥哥76kO",
           "cleaned_pinyin": "mian mian : ge xian xia de ge ge",
-          "label": 0,
+          "label": 1,
           "source": "auto",
           "extract_time": 1778933319242,
           "matched_rules": []
@@ -6180,7 +6180,7 @@
           "author_name": "奶盖兔",
           "original_text": "D.D个线下的哥哥55mP",
           "cleaned_pinyin": "nai gai tu : ge xian xia de ge ge",
-          "label": 0,
+          "label": 1,
           "source": "auto",
           "extract_time": 1778933319242,
           "matched_rules": []
@@ -6191,7 +6191,7 @@
           "author_name": "呆呆兔",
           "original_text": "刚分手想被爱63kP",
           "cleaned_pinyin": "dai dai tu : gang fen shou xiang bei ai",
-          "label": 0,
+          "label": 1,
           "source": "auto",
           "extract_time": 1778933319242,
           "matched_rules": []
@@ -6202,7 +6202,7 @@
           "author_name": "心动猫",
           "original_text": "想找会疼人的哥哥82oR",
           "cleaned_pinyin": "xin dong mao : xiang zhao hui teng ren de ge ge",
-          "label": 0,
+          "label": 1,
           "source": "auto",
           "extract_time": 1778933319242,
           "matched_rules": []
@@ -6213,7 +6213,7 @@
           "author_name": "浅笑安",
           "original_text": "想找会疼人的哥哥42kG",
           "cleaned_pinyin": "qian xiao an : xiang zhao hui teng ren de ge ge",
-          "label": 0,
+          "label": 1,
           "source": "auto",
           "extract_time": 1778933319242,
           "matched_rules": []

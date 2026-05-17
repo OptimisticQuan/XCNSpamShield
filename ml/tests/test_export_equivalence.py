@@ -1,8 +1,10 @@
 from pathlib import Path
+import sys
 
 import pytest
 import torch
 
+from src.export.convert_tfjs import build_module_command
 from src.export.export_onnx import main as export_onnx_main
 from src.models.textcnn import PinyinTextCNN, pool_convolution_output
 
@@ -32,3 +34,10 @@ def test_pool_convolution_output_ignores_fully_padded_windows() -> None:
 
 def test_export_module_exists() -> None:
     assert callable(export_onnx_main)
+
+
+def test_build_module_command_uses_current_python() -> None:
+    command = build_module_command('onnx2tf', ['-i', 'model.onnx'])
+
+    assert command[:3] == [sys.executable, '-m', 'onnx2tf']
+    assert command[3:] == ['-i', 'model.onnx']

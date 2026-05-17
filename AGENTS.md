@@ -1,2 +1,3 @@
 - pnpm 管理node项目
 - uv 管理python项目
+- docs目录有PLAN.md和SPEC.md，分别是计划和规范

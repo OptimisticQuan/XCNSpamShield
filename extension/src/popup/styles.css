@@ -333,10 +333,16 @@ body[data-page-mode='standalone'] {
 }
 
 .blocking-panel-header,
-.blocking-pagination,
 .blocking-entry-title-row {
   justify-content: space-between;
   flex-wrap: wrap;
+}
+
+.blocking-pagination {
+  justify-content: center;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  padding-top: 2px;
 }
 
 .blocking-panel-header {
@@ -377,8 +383,23 @@ body[data-page-mode='standalone'] {
   display: grid;
   flex: 1 1 auto;
   gap: 6px;
+  align-content: start;
+  grid-auto-rows: max-content;
   min-height: 0;
   overflow: auto;
+}
+
+.blocking-pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 25px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(21, 32, 51, 0.05);
+  color: #536471;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .blocking-entry-card {
