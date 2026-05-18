@@ -3,6 +3,7 @@ export type LabelSource = 'auto' | 'manual';
 export type BlockQueueAction = 'block' | 'unblock';
 export type BlockQueueState = 'queued' | 'processing' | 'failed';
 export type BlockLogStatus = 'success' | 'failed' | 'cancelled';
+export type ReplyBlockingState = 'none' | 'queued' | 'blocked';
 
 export interface MainPostRecord {
   author: string;
@@ -16,6 +17,15 @@ export interface CollectedReply {
   authorName: string;
   text: string;
   timestamp: number;
+}
+
+export interface ReplyBlockingTarget {
+  replyId: string;
+  author: string;
+}
+
+export interface ReplyBlockingStatus extends ReplyBlockingTarget {
+  state: ReplyBlockingState;
 }
 
 export interface CollectedThreadPayload {

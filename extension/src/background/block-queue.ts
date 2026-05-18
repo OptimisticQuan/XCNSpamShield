@@ -5,7 +5,7 @@ import {
   BLOCK_QUEUE_RETRY_DELAY_MS,
   BLOCKING_OVERVIEW_PAGE_SIZE,
 } from '@/shared/constants';
-import type { BlockingOverview } from '@/shared/types';
+import type { BlockingOverview, ReplyBlockingState, ReplyBlockingStatus, ReplyBlockingTarget } from '@/shared/types';
 import {
   addBlockLog,
   deleteBlockQueueItem,
@@ -17,6 +17,7 @@ import {
   listBlockingOverview,
   putBlockQueueItem,
   type AuthorSpamSummary,
+  type StoredBlockLogEntry,
   type StoredBlockQueueItem,
 } from '@/storage/db';
 
@@ -50,6 +51,33 @@ export async function getQueuedBlockAuthors(authors: string[]): Promise<string[]
   return uniqueAuthors.filter((author, index) => queueItems[index]?.action === 'block');
 }
 
+export async function getReplyBlockingStates(replies: ReplyBlockingTarget[]): Promise<ReplyBlockingStatus[]> {
+  const normalizedReplies = replies
+    .map((reply) => ({
+      replyId: reply.replyId.trim(),
+      author: normalizeAuthor(reply.author),
+    }))
+    .filter((reply) => reply.replyId && reply.author);
+
+  if (normalizedReplies.length === 0) {
+    return [];
+  }
+
+  const uniqueAuthors = Array.from(new Set(normalizedReplies.map((reply) => reply.author)));
+  const [queueItems, latestLogs] = await Promise.all([
+    Promise.all(uniqueAuthors.map((author) => getBlockQueueItem(author))),
+    Promise.all(uniqueAuthors.map((author) => getLatestSuccessfulBlockLog(author))),
+  ]);
+
+  const queueItemsByAuthor = new Map(uniqueAuthors.map((author, index) => [author, queueItems[index] ?? null]));
+  const latestLogsByAuthor = new Map(uniqueAuthors.map((author, index) => [author, latestLogs[index] ?? null]));
+
+  return normalizedReplies.map((reply) => ({
+    ...reply,
+    state: resolveReplyBlockingState(reply, queueItemsByAuthor.get(reply.author) ?? null, latestLogsByAuthor.get(reply.author) ?? null),
+  }));
+}
+
 export async function queueBlockAuthor(
   author: string,
   authorName?: string,
@@ -65,6 +93,7 @@ export async function queueBlockAuthor(
     await putBlockQueueItem({
       ...existing,
       authorName: authorName || existing.authorName,
+      spamReplyIds: mergeReplyIds(existing.spamReplyIds, replyId),
       updatedAt: Date.now(),
     });
     return { queued: false, active: true, action: 'already-queued' };
@@ -72,11 +101,6 @@ export async function queueBlockAuthor(
 
   if (existing?.action === 'unblock') {
     await cancelBlockQueueAuthor(normalizedAuthor);
-  }
-
-  const latestSuccessfulLog = await getLatestSuccessfulBlockLog(normalizedAuthor);
-  if (latestSuccessfulLog?.action === 'block') {
-    return { queued: false, active: false, action: 'noop' };
   }
 
   const summary = await getAuthorSpamSummary(normalizedAuthor);
@@ -91,7 +115,7 @@ export async function queueBlockAuthor(
     nextRunAt: await reserveNextRunAt(queuedAt),
     attemptCount: 0,
     spamReplyCount: summary?.spamReplyCount ?? 1,
-    spamReplyIds: summary?.spamReplyIds ?? (replyId ? [replyId] : []),
+    spamReplyIds: mergeReplyIds(summary?.spamReplyIds, replyId),
   });
   await scheduleBlockQueueAlarm();
   return {
@@ -121,6 +145,7 @@ export async function cancelBlockQueueAuthor(author: string): Promise<boolean> {
     createdAt: Date.now(),
     message: existing.action === 'block' ? '已从自动拉黑队列移出' : '已取消排队中的撤销拉黑操作',
     spamReplyCount: existing.spamReplyCount,
+    spamReplyIds: existing.spamReplyIds,
   });
   await scheduleBlockQueueAlarm();
   return true;
@@ -207,7 +232,7 @@ async function refreshAutoBlockQueueForAuthor(author: string): Promise<void> {
       authorName: summary.authorName,
       updatedAt: Date.now(),
       spamReplyCount: summary.spamReplyCount,
-      spamReplyIds: summary.spamReplyIds,
+      spamReplyIds: mergeReplyIds(existing.spamReplyIds, ...summary.spamReplyIds),
     });
     return;
   }
@@ -223,7 +248,7 @@ async function refreshAutoBlockQueueForAuthor(author: string): Promise<void> {
     nextRunAt: await reserveNextRunAt(queuedAt),
     attemptCount: 0,
     spamReplyCount: summary.spamReplyCount,
-    spamReplyIds: summary.spamReplyIds,
+    spamReplyIds: mergeReplyIds(summary.spamReplyIds),
   });
 }
 
@@ -311,6 +336,7 @@ async function runNextDueBlockQueueItem(): Promise<void> {
           ? `已自动拉黑 @${processingItem.author}`
           : `已撤销 @${processingItem.author} 的拉黑`,
       spamReplyCount: processingItem.spamReplyCount,
+      spamReplyIds: processingItem.spamReplyIds,
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -333,6 +359,7 @@ async function runNextDueBlockQueueItem(): Promise<void> {
           ? `自动拉黑 @${processingItem.author} 失败`
           : `撤销 @${processingItem.author} 的拉黑失败`,
       spamReplyCount: processingItem.spamReplyCount,
+      spamReplyIds: processingItem.spamReplyIds,
       errorMessage,
     });
   } finally {
@@ -362,4 +389,48 @@ export function shouldAutoQueueBlock(
 
 function normalizeAuthor(author: string): string {
   return author.trim().replace(/^@/u, '');
+}
+
+function resolveReplyBlockingState(
+  reply: ReplyBlockingTarget,
+  queueItem: StoredBlockQueueItem | null,
+  latestSuccessfulLog: StoredBlockLogEntry | null,
+): ReplyBlockingState {
+  if (queueItem?.action === 'block') {
+    return 'queued';
+  }
+
+  if (latestSuccessfulLog?.action === 'block') {
+    return 'blocked';
+  }
+
+  if (queueItem?.spamReplyIds.includes(reply.replyId)) {
+    return queueItem.action === 'block' ? 'queued' : 'none';
+  }
+
+  if (latestSuccessfulLog?.action === 'block' && latestSuccessfulLog.spamReplyIds?.includes(reply.replyId)) {
+    return 'blocked';
+  }
+
+  return 'none';
+}
+
+function mergeReplyIds(replyIds: Iterable<string> | undefined, ...extraReplyIds: Array<string | undefined>): string[] {
+  const nextReplyIds = new Set<string>();
+
+  for (const replyId of replyIds ?? []) {
+    const normalizedReplyId = replyId.trim();
+    if (normalizedReplyId) {
+      nextReplyIds.add(normalizedReplyId);
+    }
+  }
+
+  for (const replyId of extraReplyIds) {
+    const normalizedReplyId = replyId?.trim();
+    if (normalizedReplyId) {
+      nextReplyIds.add(normalizedReplyId);
+    }
+  }
+
+  return Array.from(nextReplyIds);
 }

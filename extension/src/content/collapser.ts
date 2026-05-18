@@ -18,7 +18,9 @@ export function applyCollapsedState(article: HTMLElement, reason: string, option
   host.dataset.xcnspamshieldCollapseReason = reason;
   host.classList.remove(COLLAPSE_HOST_QUEUED_HIDDEN_CLASS);
   delete host.dataset.xcnspamshieldQueuedHidden;
+  delete host.dataset.xcnspamshieldBlockingState;
   delete article.dataset.xcnspamshieldQueuedHidden;
+  delete article.dataset.xcnspamshieldBlockingState;
   let banner = host.querySelector<HTMLElement>(`:scope > .${PLACEHOLDER_BANNER_CLASS}`);
 
   if (!banner) {
@@ -44,20 +46,24 @@ export function clearCollapsedState(article: HTMLElement): void {
   delete article.dataset.xcnspamshieldCollapseReason;
 }
 
-export function applyQueuedHiddenState(article: HTMLElement): void {
+export function applyQueuedHiddenState(article: HTMLElement, state: 'queued' | 'blocked' = 'queued'): void {
   clearCollapsedState(article);
 
   const host = getCollapseHost(article);
   host.classList.add(COLLAPSE_HOST_QUEUED_HIDDEN_CLASS);
   host.dataset.xcnspamshieldQueuedHidden = 'true';
+  host.dataset.xcnspamshieldBlockingState = state;
   article.dataset.xcnspamshieldQueuedHidden = 'true';
+  article.dataset.xcnspamshieldBlockingState = state;
 }
 
 export function clearQueuedHiddenState(article: HTMLElement): void {
   const host = getCollapseHost(article);
   host.classList.remove(COLLAPSE_HOST_QUEUED_HIDDEN_CLASS);
   delete host.dataset.xcnspamshieldQueuedHidden;
+  delete host.dataset.xcnspamshieldBlockingState;
   delete article.dataset.xcnspamshieldQueuedHidden;
+  delete article.dataset.xcnspamshieldBlockingState;
 }
 
 function syncCollapseBanner(host: HTMLElement, banner: HTMLElement, options: CollapseBannerOptions): void {
@@ -70,6 +76,7 @@ function syncCollapseBanner(host: HTMLElement, banner: HTMLElement, options: Col
   host.classList.toggle(COLLAPSE_HOST_COLLAPSED_CLASS, !expanded);
   host.classList.toggle(COLLAPSE_HOST_EXPANDED_CLASS, expanded);
   host.dataset.xcnspamshieldCollapsed = expanded ? 'false' : 'true';
+  host.dataset.xcnspamshieldExpanded = expanded ? 'true' : 'false';
 
   if (article) {
     article.classList.toggle(COLLAPSED_CLASS, !expanded);

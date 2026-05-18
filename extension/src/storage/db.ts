@@ -54,6 +54,7 @@ export interface StoredBlockLogEntry {
   createdAt: number;
   message: string;
   spamReplyCount: number;
+  spamReplyIds?: string[];
   errorMessage?: string;
 }
 

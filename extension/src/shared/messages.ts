@@ -6,6 +6,8 @@ import type {
   ExtractedReplyView,
   FloatingCapturePosition,
   ManualReplyPayload,
+  ReplyBlockingStatus,
+  ReplyBlockingTarget,
   ReplyClassificationPayload,
   ReplyRecord,
   ThreadGroupView,
@@ -15,6 +17,7 @@ export type RuntimeRequest =
   | { type: 'GET_SETTINGS' }
   | { type: 'GET_BLOCKING_OVERVIEW'; queuePage?: number; logPage?: number; pageSize?: number }
   | { type: 'GET_BLOCK_QUEUE_AUTHORS'; authors: string[] }
+  | { type: 'GET_REPLY_BLOCKING_STATES'; replies: ReplyBlockingTarget[] }
   | { type: 'SET_BLOCKING'; enabled: boolean }
   | { type: 'SET_SHOW_FLOATING_CAPTURE_BUTTON'; enabled: boolean }
   | { type: 'SET_FLOATING_CAPTURE_POSITION'; position: FloatingCapturePosition }
@@ -39,6 +42,7 @@ export type RuntimeResponseMap = {
   GET_SETTINGS: ExtensionSettings;
   GET_BLOCKING_OVERVIEW: BlockingOverview;
   GET_BLOCK_QUEUE_AUTHORS: string[];
+  GET_REPLY_BLOCKING_STATES: ReplyBlockingStatus[];
   SET_BLOCKING: ExtensionSettings;
   SET_SHOW_FLOATING_CAPTURE_BUTTON: ExtensionSettings;
   SET_FLOATING_CAPTURE_POSITION: ExtensionSettings;

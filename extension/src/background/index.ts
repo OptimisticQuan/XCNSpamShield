@@ -2,6 +2,7 @@ import {
   cancelBlockQueueAuthor,
   getBlockingOverviewData,
   getQueuedBlockAuthors,
+  getReplyBlockingStates,
   initializeBlockQueueProcessing,
   queueBlockAuthor,
   queueUnblockAuthor,
@@ -51,6 +52,8 @@ async function handleRuntimeMessage(message: RuntimeRequest): Promise<RuntimeRes
       return success(await getBlockingOverviewData(message.queuePage, message.logPage, message.pageSize));
     case 'GET_BLOCK_QUEUE_AUTHORS':
       return success(await getQueuedBlockAuthors(message.authors));
+    case 'GET_REPLY_BLOCKING_STATES':
+      return success(await getReplyBlockingStates(message.replies));
     case 'SET_BLOCKING': {
       const settings = await setBlockingEnabled(message.enabled);
       await broadcastSettings(settings);
