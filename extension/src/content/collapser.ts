@@ -137,7 +137,10 @@ function renderCollapseBannerContent(
     toggleButton.setAttribute('aria-label', nextToggleAriaLabel);
   }
 
-  const nextStatusText = options.expanded ? 'Spam 已展开 · 点击收起' : 'Spam 已折叠 · 点击展开';
+  const compactReason = options.reason.replace(/\s+/gu, ' ').trim();
+  const nextStatusText = options.expanded
+    ? `Spam 已展开${compactReason ? ` · ${compactReason}` : ''} · 点击收起`
+    : `Spam 已折叠${compactReason ? ` · ${compactReason}` : ''} · 点击展开`;
   if (status.textContent !== nextStatusText) {
     status.textContent = nextStatusText;
   }

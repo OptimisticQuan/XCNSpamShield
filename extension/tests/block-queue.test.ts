@@ -1,20 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const storageMocks = vi.hoisted(() => ({
-  addBlockLog: vi.fn(async (entry) => entry),
-  deleteBlockQueueItem: vi.fn(async () => {}),
-  getAuthorSpamSummary: vi.fn(async () => null),
-  getBlockQueueItem: vi.fn(async () => null),
-  getLatestSuccessfulBlockLog: vi.fn(async () => null),
-  getNextBlockQueueRunAt: vi.fn(async () => null),
-  listBlockQueueItems: vi.fn(async () => []),
-  listBlockingOverview: vi.fn(async () => ({
+  addBlockLog: vi.fn<(...args: any[]) => Promise<any>>(async (entry) => entry),
+  deleteAuthorState: vi.fn<(...args: any[]) => Promise<void>>(async () => {}),
+  deleteBlockQueueItem: vi.fn<(...args: any[]) => Promise<void>>(async () => {}),
+  getAuthorSpamSummaryByIdentity: vi.fn<(...args: any[]) => Promise<any>>(async () => null),
+  getAuthorStates: vi.fn<(...args: any[]) => Promise<any[]>>(async () => []),
+  getBlockQueueItem: vi.fn<(...args: any[]) => Promise<any>>(async () => null),
+  getLatestSuccessfulBlockLog: vi.fn<(...args: any[]) => Promise<any>>(async () => null),
+  getNextBlockQueueRunAt: vi.fn<(...args: any[]) => Promise<number | null>>(async () => null),
+  listBlockLogEntries: vi.fn<(...args: any[]) => Promise<any[]>>(async () => []),
+  listBlockQueueItems: vi.fn<(...args: any[]) => Promise<any[]>>(async () => []),
+  listBlockingOverview: vi.fn<(...args: any[]) => Promise<any>>(async () => ({
     queue: { items: [], page: 1, pageSize: 4, total: 0, totalPages: 1 },
     logs: { items: [], page: 1, pageSize: 4, total: 0, totalPages: 1 },
     isProcessing: false,
     nextRunAt: null,
   })),
-  putBlockQueueItem: vi.fn(async (item) => item),
+  putBlockQueueItem: vi.fn<(...args: any[]) => Promise<any>>(async (item) => item),
 }));
 
 vi.mock('@/storage/db', () => storageMocks);
@@ -29,19 +32,24 @@ describe('block queue', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     storageMocks.addBlockLog.mockClear();
+    storageMocks.deleteAuthorState.mockClear();
     storageMocks.deleteBlockQueueItem.mockClear();
-    storageMocks.getAuthorSpamSummary.mockReset();
+    storageMocks.getAuthorSpamSummaryByIdentity.mockReset();
+    storageMocks.getAuthorStates.mockReset();
     storageMocks.getBlockQueueItem.mockReset();
     storageMocks.getLatestSuccessfulBlockLog.mockReset();
     storageMocks.getNextBlockQueueRunAt.mockReset();
+    storageMocks.listBlockLogEntries.mockReset();
     storageMocks.listBlockQueueItems.mockReset();
     storageMocks.listBlockingOverview.mockClear();
     storageMocks.putBlockQueueItem.mockReset();
 
-    storageMocks.getAuthorSpamSummary.mockResolvedValue(null);
+    storageMocks.getAuthorSpamSummaryByIdentity.mockResolvedValue(null);
+    storageMocks.getAuthorStates.mockResolvedValue([]);
     storageMocks.getBlockQueueItem.mockResolvedValue(null);
     storageMocks.getLatestSuccessfulBlockLog.mockResolvedValue(null);
     storageMocks.getNextBlockQueueRunAt.mockResolvedValue(null);
+    storageMocks.listBlockLogEntries.mockResolvedValue([]);
     storageMocks.listBlockQueueItems.mockResolvedValue([]);
     storageMocks.putBlockQueueItem.mockImplementation(async (item) => item);
 
@@ -69,7 +77,7 @@ describe('block queue', () => {
       spamReplyCount: 2,
     });
 
-    const result = await queueBlockAuthor('repeat_author', 'Repeat Author', 'reply-1');
+    const result = await queueBlockAuthor('repeat_author', 'Repeat Author', undefined, 'reply-1');
 
     expect(result).toEqual({
       queued: true,
@@ -103,7 +111,7 @@ describe('block queue', () => {
       spamReplyIds: ['reply-1'],
     });
 
-    const result = await queueBlockAuthor('repeat_author', 'Repeat Author', 'reply-2');
+    const result = await queueBlockAuthor('repeat_author', 'Repeat Author', undefined, 'reply-2');
 
     expect(result).toEqual({
       queued: false,
@@ -136,23 +144,33 @@ describe('block queue', () => {
 
       return null;
     });
-    storageMocks.getLatestSuccessfulBlockLog.mockImplementation(async (author: string) => {
-      if (author === 'blocked_author') {
-        return {
-          id: 2,
-          author,
-          authorName: 'Blocked Author',
-          action: 'block',
-          status: 'success',
-          createdAt: 2,
-          message: 'blocked',
-          spamReplyCount: 1,
-          spamReplyIds: ['reply-blocked'],
-        };
-      }
-
-      return null;
-    });
+    storageMocks.listBlockQueueItems.mockResolvedValue([
+      {
+        author: 'queued_author',
+        authorName: 'Queued Author',
+        action: 'block',
+        state: 'queued',
+        queuedAt: 1,
+        updatedAt: 1,
+        nextRunAt: 2,
+        attemptCount: 0,
+        spamReplyCount: 1,
+        spamReplyIds: ['reply-queued'],
+      },
+    ]);
+    storageMocks.listBlockLogEntries.mockResolvedValue([
+      {
+        id: 2,
+        author: 'blocked_author',
+        authorName: 'Blocked Author',
+        action: 'block',
+        status: 'success',
+        createdAt: 2,
+        message: 'blocked',
+        spamReplyCount: 1,
+        spamReplyIds: ['reply-blocked'],
+      },
+    ]);
 
     const states = await getReplyBlockingStates([
       { replyId: 'reply-queued', author: 'queued_author' },
@@ -164,6 +182,26 @@ describe('block queue', () => {
       { replyId: 'reply-queued', author: 'queued_author', state: 'queued' },
       { replyId: 'reply-blocked', author: 'blocked_author', state: 'blocked' },
       { replyId: 'reply-none', author: 'none_author', state: 'none' },
+    ]);
+  });
+
+  it('resolves whitelisted replies from persisted author states', async () => {
+    storageMocks.getAuthorStates.mockResolvedValue([
+      {
+        author: 'safe_author',
+        authorName: 'Safe Author',
+        score: -3,
+        isWhitelisted: true,
+        updatedAt: 10,
+      },
+    ]);
+
+    const states = await getReplyBlockingStates([
+      { replyId: 'reply-safe', authorId: '998877', author: 'safe_author' },
+    ]);
+
+    expect(states).toEqual([
+      { replyId: 'reply-safe', authorId: '998877', author: 'safe_author', state: 'whitelisted' },
     ]);
   });
 });

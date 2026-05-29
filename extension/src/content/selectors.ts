@@ -1,6 +1,9 @@
+import { applyCachedTweetAuthorIdentity } from '@/content/page-identity-cache';
+
 export interface ParsedTweet {
   article: HTMLElement;
   tweetId: string;
+  authorId?: string;
   author: string;
   authorName: string;
   text: string;
@@ -49,6 +52,7 @@ export function parseTweetArticle(article: HTMLElement): ParsedTweet | null {
 
   const cachedTweet = parsedTweetCache.get(article);
   if (cachedTweet?.tweetId === tweetId) {
+    applyCachedTweetAuthorIdentity(cachedTweet);
     return cachedTweet;
   }
 
@@ -60,11 +64,14 @@ export function parseTweetArticle(article: HTMLElement): ParsedTweet | null {
   const parsedTweet = {
     article,
     tweetId,
+    authorId: undefined,
     author: extractAuthorHandle(article, statusLink) ?? 'unknown',
     authorName: extractAuthorName(article) ?? extractAuthorHandle(article, statusLink) ?? 'unknown',
     text: tweetText,
     timestamp: timestampValue ? Date.parse(timestampValue) : Date.now(),
   };
+
+  applyCachedTweetAuthorIdentity(parsedTweet);
 
   parsedTweetCache.set(article, parsedTweet);
   return parsedTweet;

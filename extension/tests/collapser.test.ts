@@ -26,7 +26,7 @@ describe('collapser', () => {
     expect(host).not.toBeNull();
     expect(article).not.toBeNull();
 
-    applyCollapsedState(article!, '规则或模型命中');
+    applyCollapsedState(article!, '模型 91.0%');
 
     const banner = host!.querySelector<HTMLElement>('.xcnspamshield-collapse-banner');
     const toggleButton = host!.querySelector<HTMLButtonElement>('.xcnspamshield-collapse-banner-toggle');
@@ -36,6 +36,7 @@ describe('collapser', () => {
     expect(banner?.textContent).toContain('晓萱~❀同城上门');
     expect(banner?.textContent).toContain('@howell_kat4653');
     expect(banner?.textContent).toContain('已折叠');
+    expect(banner?.textContent).toContain('模型 91.0%');
 
     toggleButton?.click();
 

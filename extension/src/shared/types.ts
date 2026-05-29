@@ -3,7 +3,7 @@ export type LabelSource = 'auto' | 'manual';
 export type BlockQueueAction = 'block' | 'unblock';
 export type BlockQueueState = 'queued' | 'processing' | 'failed';
 export type BlockLogStatus = 'success' | 'failed' | 'cancelled';
-export type ReplyBlockingState = 'none' | 'queued' | 'blocked';
+export type ReplyBlockingState = 'none' | 'queued' | 'blocked' | 'whitelisted';
 
 export interface MainPostRecord {
   author: string;
@@ -13,6 +13,7 @@ export interface MainPostRecord {
 
 export interface CollectedReply {
   replyId: string;
+  authorId?: string;
   author: string;
   authorName: string;
   text: string;
@@ -21,6 +22,7 @@ export interface CollectedReply {
 
 export interface ReplyBlockingTarget {
   replyId: string;
+  authorId?: string;
   author: string;
 }
 
@@ -51,6 +53,7 @@ export interface ReplyClassificationPayload {
 export interface ReplyRecord {
   threadId: string;
   replyId: string;
+  authorId?: string;
   author: string;
   authorName: string;
   originalText: string;

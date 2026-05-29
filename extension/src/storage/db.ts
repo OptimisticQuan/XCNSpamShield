@@ -1,7 +1,8 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 
 import { normalizeReplyToPinyinWords } from '@/ml/tokenizer';
-import { BLOCKING_OVERVIEW_PAGE_SIZE, DB_NAME, DB_VERSION, DEFAULT_SETTINGS, SETTINGS_KEY } from '@/shared/constants';
+import { buildAuthorScoreDeltas, normalizeModerationAuthor, shouldWhitelistAuthor } from '@/shared/author-moderation';
+import { AUTHOR_STATE_CACHE_LIMIT, BLOCKING_OVERVIEW_PAGE_SIZE, DB_NAME, DB_VERSION, DEFAULT_SETTINGS, SETTINGS_KEY } from '@/shared/constants';
 import type {
   BlockActionLogView,
   BlockingOverview,
@@ -33,6 +34,7 @@ interface SettingStoreRecord {
 
 export interface StoredBlockQueueItem {
   author: string;
+  authorId?: string;
   authorName: string;
   action: BlockQueueAction;
   state: BlockQueueState;
@@ -48,6 +50,7 @@ export interface StoredBlockQueueItem {
 export interface StoredBlockLogEntry {
   id?: number;
   author: string;
+  authorId?: string;
   authorName: string;
   action: BlockQueueAction;
   status: BlockLogStatus;
@@ -60,10 +63,28 @@ export interface StoredBlockLogEntry {
 
 export interface AuthorSpamSummary {
   author: string;
+  authorId?: string;
   authorName: string;
   spamReplyCount: number;
   spamReplyIds: string[];
   latestSpamExtractTime: number;
+}
+
+export interface StoredAuthorState {
+  author: string;
+  authorName: string;
+  score: number;
+  isWhitelisted: boolean;
+  updatedAt: number;
+}
+
+interface AuthorStateStoreLike {
+  get(key: string): Promise<StoredAuthorState | undefined>;
+  put(value: StoredAuthorState): Promise<unknown>;
+  delete(key: string): Promise<void>;
+  index(name: 'by-updated-at'): {
+    getAll(): Promise<StoredAuthorState[]>;
+  };
 }
 
 interface XCNSpamShieldDatabase extends DBSchema {
@@ -78,6 +99,7 @@ interface XCNSpamShieldDatabase extends DBSchema {
       'by-thread': string;
       'by-extract-time': number;
       'by-author': string;
+      'by-author-id': string;
     };
   };
   settings: {
@@ -100,6 +122,13 @@ interface XCNSpamShieldDatabase extends DBSchema {
       'by-author': string;
     };
   };
+  authorStates: {
+    key: string;
+    value: StoredAuthorState;
+    indexes: {
+      'by-updated-at': number;
+    };
+  };
 }
 
 let databasePromise: Promise<IDBPDatabase<XCNSpamShieldDatabase>> | undefined;
@@ -107,7 +136,7 @@ let databasePromise: Promise<IDBPDatabase<XCNSpamShieldDatabase>> | undefined;
 function getDatabase(): Promise<IDBPDatabase<XCNSpamShieldDatabase>> {
   if (!databasePromise) {
     databasePromise = openDB<XCNSpamShieldDatabase>(DB_NAME, DB_VERSION, {
-      upgrade(database, oldVersion, _newVersion, transaction) {
+      async upgrade(database, oldVersion, _newVersion, transaction) {
         if (oldVersion < 1) {
           database.createObjectStore('threads', { keyPath: 'threadId' });
 
@@ -115,6 +144,7 @@ function getDatabase(): Promise<IDBPDatabase<XCNSpamShieldDatabase>> {
           replyStore.createIndex('by-thread', 'threadId');
           replyStore.createIndex('by-extract-time', 'extractTime');
           replyStore.createIndex('by-author', 'author');
+          replyStore.createIndex('by-author-id', 'authorId');
 
           database.createObjectStore('settings', { keyPath: 'key' });
 
@@ -125,7 +155,9 @@ function getDatabase(): Promise<IDBPDatabase<XCNSpamShieldDatabase>> {
           const blockLogStore = database.createObjectStore('blockLogs', { keyPath: 'id', autoIncrement: true });
           blockLogStore.createIndex('by-created-at', 'createdAt');
           blockLogStore.createIndex('by-author', 'author');
-          return;
+
+          const authorStateStore = database.createObjectStore('authorStates', { keyPath: 'author' });
+          authorStateStore.createIndex('by-updated-at', 'updatedAt');
         }
 
         if (oldVersion < 2) {
@@ -145,6 +177,31 @@ function getDatabase(): Promise<IDBPDatabase<XCNSpamShieldDatabase>> {
             blockLogStore.createIndex('by-created-at', 'createdAt');
             blockLogStore.createIndex('by-author', 'author');
           }
+        }
+
+        if (oldVersion < 3) {
+          const replyStore = transaction.objectStore('replies');
+          if (!replyStore.indexNames.contains('by-author-id')) {
+            replyStore.createIndex('by-author-id', 'authorId');
+          }
+
+          if (!database.objectStoreNames.contains('authorStates')) {
+            const authorStateStore = database.createObjectStore('authorStates', { keyPath: 'author' });
+            authorStateStore.createIndex('by-updated-at', 'updatedAt');
+          }
+        }
+
+        if (oldVersion < 4) {
+          const replyStore = transaction.objectStore('replies');
+          if (database.objectStoreNames.contains('authorStates')) {
+            database.deleteObjectStore('authorStates');
+          }
+
+          const authorStateStore = database.createObjectStore('authorStates', { keyPath: 'author' });
+          authorStateStore.createIndex('by-updated-at', 'updatedAt');
+
+          const replies = (await replyStore.getAll()) as ReplyRecord[];
+          await rebuildAuthorStatesFromReplies(authorStateStore, replies);
         }
       },
     }).then(async (database) => {
@@ -220,6 +277,7 @@ async function isDatabaseEmpty(database: IDBPDatabase<XCNSpamShieldDatabase>): P
     database.count('settings'),
     database.count('blockQueue'),
     database.count('blockLogs'),
+    database.count('authorStates'),
   ]);
 
   return counts.every((count) => count === 0);
@@ -291,10 +349,11 @@ export async function upsertThreadPayload(
   payload: ExtractedThreadPayload,
 ): Promise<{ savedReplies: number; replies: ReplyRecord[] }> {
   const database = await getDatabase();
-  const transaction = database.transaction(['threads', 'replies'], 'readwrite');
+  const transaction = database.transaction(['threads', 'replies', 'authorStates'], 'readwrite');
   const uniqueReplies = dedupeReplies(payload.replies);
   const existingThread = await transaction.objectStore('threads').get(payload.threadId);
   const mergedReplies: ReplyRecord[] = [];
+  const authorStateDeltas = new Map<string, { delta: number; author: string; authorName: string }>();
 
   const threadRecord = mergeThreadRecord(existingThread, payload);
   await transaction.objectStore('threads').put(threadRecord);
@@ -304,13 +363,41 @@ export async function upsertThreadPayload(
     const nextReply = mergeReply(existing, reply);
     await transaction.objectStore('replies').put(nextReply);
     mergedReplies.push(nextReply);
+    accumulateAuthorStateDelta(authorStateDeltas, existing, nextReply);
   }
+
+  await applyAuthorStateDeltas(transaction.objectStore('authorStates'), authorStateDeltas);
 
   await transaction.done;
   return {
     savedReplies: uniqueReplies.length,
     replies: mergedReplies.map((reply) => sanitizeReplyRecord(reply)),
   };
+}
+
+export async function upsertReplyRecords(replies: ReplyRecord[]): Promise<ReplyRecord[]> {
+  const uniqueReplies = dedupeReplies(replies);
+  if (uniqueReplies.length === 0) {
+    return [];
+  }
+
+  const database = await getDatabase();
+  const transaction = database.transaction(['replies', 'authorStates'], 'readwrite');
+  const mergedReplies: ReplyRecord[] = [];
+  const authorStateDeltas = new Map<string, { delta: number; author: string; authorName: string }>();
+
+  for (const reply of uniqueReplies) {
+    const existing = await transaction.objectStore('replies').get(reply.replyId);
+    const nextReply = mergeReply(existing, reply);
+    await transaction.objectStore('replies').put(nextReply);
+    mergedReplies.push(nextReply);
+    accumulateAuthorStateDelta(authorStateDeltas, existing, nextReply);
+  }
+
+  await applyAuthorStateDeltas(transaction.objectStore('authorStates'), authorStateDeltas);
+  await transaction.done;
+
+  return mergedReplies.map((reply) => sanitizeReplyRecord(reply));
 }
 
 function dedupeReplies(replies: ReplyRecord[]): ReplyRecord[] {
@@ -366,6 +453,7 @@ function mergeReply(existing: ReplyRecord | undefined, incoming: ReplyRecord): R
 function sanitizeReplyRecord(reply: ReplyRecord): ReplyRecord {
   return {
     ...reply,
+    authorId: reply.authorId?.trim() || undefined,
     authorName: reply.authorName || reply.author,
     cleanedPinyin: reply.cleanedPinyin?.trim() || undefined,
     matchedRules: [],
@@ -468,13 +556,55 @@ export async function getReplyRecord(replyId: string): Promise<ReplyRecord | nul
   return reply ? sanitizeReplyRecord(reply) : null;
 }
 
-export async function getAuthorSpamSummary(author: string): Promise<AuthorSpamSummary | null> {
-  if (!author || author === 'unknown') {
+export async function getAuthorState(author: string): Promise<StoredAuthorState | null> {
+  const normalizedAuthor = normalizeModerationAuthor(author);
+  if (!normalizedAuthor) {
     return null;
   }
 
   const database = await getDatabase();
-  const replies = await database.getAllFromIndex('replies', 'by-author', author);
+  return (await database.get('authorStates', normalizedAuthor)) ?? null;
+}
+
+export async function getAuthorStates(authors: string[]): Promise<StoredAuthorState[]> {
+  const uniqueAuthors = Array.from(new Set(authors.map((author) => normalizeModerationAuthor(author)).filter(Boolean))) as string[];
+  if (uniqueAuthors.length === 0) {
+    return [];
+  }
+
+  const database = await getDatabase();
+  const transaction = database.transaction('authorStates', 'readonly');
+  const states = await Promise.all(uniqueAuthors.map((author) => transaction.store.get(author)));
+  await transaction.done;
+
+  return states.filter((state): state is StoredAuthorState => Boolean(state));
+}
+
+export async function deleteAuthorState(author: string): Promise<void> {
+  const normalizedAuthor = normalizeModerationAuthor(author);
+  if (!normalizedAuthor) {
+    return;
+  }
+
+  const database = await getDatabase();
+  await database.delete('authorStates', normalizedAuthor);
+}
+
+export async function getAuthorSpamSummary(author: string): Promise<AuthorSpamSummary | null> {
+  return getAuthorSpamSummaryByIdentity(undefined, author);
+}
+
+export async function getAuthorSpamSummaryByIdentity(authorId?: string, author?: string): Promise<AuthorSpamSummary | null> {
+  const normalizedAuthor = normalizeModerationAuthor(author);
+  const normalizedAuthorId = authorId?.trim();
+  if (!normalizedAuthor && !normalizedAuthorId) {
+    return null;
+  }
+
+  const database = await getDatabase();
+  const replies = normalizedAuthor
+    ? await database.getAllFromIndex('replies', 'by-author', normalizedAuthor)
+    : await database.getAllFromIndex('replies', 'by-author-id', normalizedAuthorId!);
   const spamReplies = replies
     .map((reply) => sanitizeReplyRecord(reply))
     .filter((reply) => reply.label === 1);
@@ -486,8 +616,9 @@ export async function getAuthorSpamSummary(author: string): Promise<AuthorSpamSu
   const latestSpamReply = [...spamReplies].sort((left, right) => right.extractTime - left.extractTime)[0];
 
   return {
-    author,
-    authorName: latestSpamReply?.authorName ?? author,
+    author: latestSpamReply?.author ?? normalizedAuthor ?? 'unknown',
+    authorId: latestSpamReply?.authorId ?? normalizedAuthorId,
+    authorName: latestSpamReply?.authorName ?? latestSpamReply?.author ?? normalizedAuthor ?? 'unknown',
     spamReplyCount: spamReplies.length,
     spamReplyIds: spamReplies.map((reply) => reply.replyId),
     latestSpamExtractTime: latestSpamReply?.extractTime ?? 0,
@@ -496,13 +627,24 @@ export async function getAuthorSpamSummary(author: string): Promise<AuthorSpamSu
 
 export async function deleteReply(replyId: string): Promise<void> {
   const database = await getDatabase();
-  await database.delete('replies', replyId);
+  const transaction = database.transaction(['replies', 'authorStates'], 'readwrite');
+  const reply = await transaction.objectStore('replies').get(replyId);
+  if (!reply) {
+    await transaction.done;
+    return;
+  }
+
+  await transaction.objectStore('replies').delete(replyId);
+  const authorStateDeltas = new Map<string, { delta: number; author: string; authorName: string }>();
+  accumulateAuthorStateDelta(authorStateDeltas, reply, null);
+  await applyAuthorStateDeltas(transaction.objectStore('authorStates'), authorStateDeltas);
+  await transaction.done;
 }
 
 export async function toggleReplyLabel(replyId: string): Promise<ReplyRecord> {
   const database = await getDatabase();
-  const transaction = database.transaction('replies', 'readwrite');
-  const reply = await transaction.store.get(replyId);
+  const transaction = database.transaction(['replies', 'authorStates'], 'readwrite');
+  const reply = await transaction.objectStore('replies').get(replyId);
 
   if (!reply) {
     throw new Error(`Reply ${replyId} was not found.`);
@@ -514,18 +656,22 @@ export async function toggleReplyLabel(replyId: string): Promise<ReplyRecord> {
     label: normalizedReply.label === 1 ? 0 : 1,
     source: 'manual',
   };
-  await transaction.store.put(updated);
+  await transaction.objectStore('replies').put(updated);
+  const authorStateDeltas = new Map<string, { delta: number; author: string; authorName: string }>();
+  accumulateAuthorStateDelta(authorStateDeltas, normalizedReply, updated);
+  await applyAuthorStateDeltas(transaction.objectStore('authorStates'), authorStateDeltas);
   await transaction.done;
   return updated;
 }
 
 export async function clearAll(): Promise<void> {
   const database = await getDatabase();
-  const transaction = database.transaction(['threads', 'replies', 'blockQueue', 'blockLogs'], 'readwrite');
+  const transaction = database.transaction(['threads', 'replies', 'blockQueue', 'blockLogs', 'authorStates'], 'readwrite');
   await transaction.objectStore('threads').clear();
   await transaction.objectStore('replies').clear();
   await transaction.objectStore('blockQueue').clear();
   await transaction.objectStore('blockLogs').clear();
+  await transaction.objectStore('authorStates').clear();
   await transaction.done;
 }
 
@@ -563,6 +709,12 @@ export async function addBlockLog(entry: StoredBlockLogEntry): Promise<StoredBlo
     ...entry,
     id,
   };
+}
+
+export async function listBlockLogEntries(): Promise<StoredBlockLogEntry[]> {
+  const database = await getDatabase();
+  const entries = await database.getAllFromIndex('blockLogs', 'by-created-at');
+  return entries.sort((left, right) => right.createdAt - left.createdAt);
 }
 
 export async function getLatestSuccessfulBlockLog(author: string): Promise<StoredBlockLogEntry | null> {
@@ -660,12 +812,6 @@ function createFallbackThread(threadId: string): ExportThread {
   };
 }
 
-async function listBlockLogEntries(): Promise<StoredBlockLogEntry[]> {
-  const database = await getDatabase();
-  const entries = await database.getAllFromIndex('blockLogs', 'by-created-at');
-  return entries.sort((left, right) => right.createdAt - left.createdAt);
-}
-
 function toBlockQueueItemView(item: StoredBlockQueueItem): BlockQueueItemView {
   return {
     author: item.author,
@@ -725,4 +871,72 @@ function paginateItems<T>(items: T[], page: number, pageSize: number): { items: 
 
 function buildProfileUrl(author: string): string {
   return `https://x.com/${author}`;
+}
+
+function accumulateAuthorStateDelta(
+  authorStateDeltas: Map<string, { delta: number; author: string; authorName: string }>,
+  previousReply: ReplyRecord | null | undefined,
+  nextReply: ReplyRecord | null | undefined,
+): void {
+  for (const { author, delta } of buildAuthorScoreDeltas(previousReply ?? null, nextReply ?? null)) {
+    const current = authorStateDeltas.get(author) ?? {
+      delta: 0,
+      author,
+      authorName: nextReply?.authorName || previousReply?.authorName || nextReply?.author || previousReply?.author || author,
+    };
+    current.delta += delta;
+    current.author = author;
+    current.authorName = nextReply?.authorName || previousReply?.authorName || current.authorName;
+    authorStateDeltas.set(author, current);
+  }
+}
+
+async function applyAuthorStateDeltas(
+  authorStateStore: AuthorStateStoreLike,
+  authorStateDeltas: Map<string, { delta: number; author: string; authorName: string }>,
+): Promise<void> {
+  if (authorStateDeltas.size === 0) {
+    return;
+  }
+
+  for (const [author, stateDelta] of authorStateDeltas) {
+    const existingState = (await authorStateStore.get(author)) as StoredAuthorState | undefined;
+    const nextScore = (existingState?.score ?? 0) + stateDelta.delta;
+
+    if (nextScore === 0) {
+      await authorStateStore.delete(author);
+      continue;
+    }
+
+    await authorStateStore.put({
+      author,
+      authorName: stateDelta.authorName || existingState?.authorName || stateDelta.author || existingState?.author || 'unknown',
+      score: nextScore,
+      isWhitelisted: shouldWhitelistAuthor(nextScore),
+      updatedAt: Date.now(),
+    });
+  }
+
+  const states = (await authorStateStore.index('by-updated-at').getAll()) as StoredAuthorState[];
+  const overflow = states.length - AUTHOR_STATE_CACHE_LIMIT;
+  if (overflow <= 0) {
+    return;
+  }
+
+  for (const staleState of states.slice(0, overflow)) {
+    await authorStateStore.delete(staleState.author);
+  }
+}
+
+async function rebuildAuthorStatesFromReplies(
+  authorStateStore: AuthorStateStoreLike,
+  replies: ReplyRecord[],
+): Promise<void> {
+  const authorStateDeltas = new Map<string, { delta: number; author: string; authorName: string }>();
+
+  for (const reply of dedupeReplies(replies).map((item) => sanitizeReplyRecord(item))) {
+    accumulateAuthorStateDelta(authorStateDeltas, null, reply);
+  }
+
+  await applyAuthorStateDeltas(authorStateStore, authorStateDeltas);
 }

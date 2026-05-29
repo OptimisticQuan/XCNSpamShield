@@ -22,7 +22,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["tfjs_model/*"],
+      "resources": ["tfjs_model/*", "page-bridge.js"],
       "matches": ["https://x.com/*", "https://twitter.com/*"]
     }
   ]

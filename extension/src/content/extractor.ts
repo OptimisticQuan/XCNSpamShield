@@ -30,6 +30,7 @@ export function buildCollectedThread(mainTweet: ParsedTweet, replies: ParsedTwee
 export function toCollectedReply(tweet: ParsedTweet): CollectedReply {
   return {
     replyId: tweet.tweetId,
+    authorId: tweet.authorId,
     author: tweet.author,
     authorName: tweet.authorName,
     text: tweet.text,

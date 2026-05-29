@@ -34,7 +34,7 @@ export type RuntimeRequest =
   | { type: 'UPSERT_MANUAL_REPLY'; payload: ManualReplyPayload }
   | { type: 'GET_REPLY_RECORDS'; replyIds: string[] }
   | { type: 'GET_REPLY_RECORD'; replyId: string }
-  | { type: 'QUEUE_BLOCK_AUTHOR'; author: string; authorName?: string; replyId?: string }
+  | { type: 'QUEUE_BLOCK_AUTHOR'; author: string; authorId?: string; authorName?: string; replyId?: string }
   | { type: 'CANCEL_BLOCK_QUEUE_AUTHOR'; author: string }
   | { type: 'QUEUE_UNBLOCK_AUTHOR'; author: string };
 

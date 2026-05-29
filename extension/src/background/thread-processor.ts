@@ -57,6 +57,7 @@ export async function buildManualReplyRecord(
   return {
     threadId: payload.threadId,
     replyId: payload.reply.replyId,
+    authorId: payload.reply.authorId,
     author: payload.reply.author,
     authorName: payload.reply.authorName,
     originalText: payload.reply.text,
@@ -80,6 +81,7 @@ async function buildReplyRecord(
   return {
     threadId,
     replyId: reply.replyId,
+    authorId: reply.authorId,
     author: reply.author,
     authorName: reply.authorName,
     originalText: reply.text,

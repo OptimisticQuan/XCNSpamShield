@@ -4,10 +4,20 @@ import { clearActionButton, ensureActionButton } from '@/content/actions';
 import { formatAuthorHandle, getQueueBlockFailureFeedback, getQueueBlockFeedback, type BlockingFeedbackTone } from '@/content/blocking-feedback';
 import { applyCollapsedState, applyQueuedHiddenState, clearCollapsedState, clearQueuedHiddenState } from '@/content/collapser';
 import { mutationsAffectOnlyInjectedUi } from '@/content/mutation-filter';
+import { cacheTweetAuthorIdentities, clearTweetAuthorIdentityCache, type TweetAuthorIdentity } from '@/content/page-identity-cache';
 import { cachedReplyResultFromRecord, ReplyResultCache, resolveCachedReplyResult, type CachedReplyResult } from '@/content/reply-result-cache';
 import { collectCurrentThread, toCollectedReply } from '@/content/extractor';
 import { collectParsedTweets, getLoadedTweetArticles, isStatusPage, type ParsedTweet } from '@/content/selectors';
-import { ACTION_BUTTON_CLASS, DEFAULT_SETTINGS, FLOATING_CAPTURE_ROOT_ID, THREAD_SCAN_DEBOUNCE_MS, THREAD_SCROLL_SCAN_DEBOUNCE_MS } from '@/shared/constants';
+import {
+  ACTION_BUTTON_CLASS,
+  DEFAULT_SETTINGS,
+  FLOATING_CAPTURE_ROOT_ID,
+  PAGE_BRIDGE_EVENT_NAME,
+  PAGE_BRIDGE_SCRIPT_FILE,
+  PAGE_BRIDGE_SCRIPT_ID,
+  THREAD_SCAN_DEBOUNCE_MS,
+  THREAD_SCROLL_SCAN_DEBOUNCE_MS,
+} from '@/shared/constants';
 import type { ContentRequest, RuntimeRequest } from '@/shared/messages';
 import { isExtensionContextInvalidatedError, sendRuntimeMessage } from '@/shared/messages';
 import type { CollectedThreadPayload, ExtensionSettings, ReplyBlockingState, ReplyBlockingStatus, ReplyRecord } from '@/shared/types';
@@ -25,6 +35,7 @@ let scanFrameHandle: number | undefined;
 const replyResultCache = new ReplyResultCache();
 const replyBlockingStateByReplyId = new Map<string, ReplyBlockingState>();
 const replyBlockingStateByAuthor = new Map<string, ReplyBlockingState>();
+const replyBlockingStateByAuthorId = new Map<string, ReplyBlockingState>();
 const pendingStoredReplyIds = new Set<string>();
 const pendingInferenceReplyIds = new Set<string>();
 let bootstrapPromise: Promise<void> = Promise.resolve();
@@ -41,6 +52,7 @@ let mutationObserver: MutationObserver | null = null;
 let contentContextActive = true;
 let scanInProgress = false;
 let rerunScanRequested = false;
+let pageBridgeListenerRegistered = false;
 
 if (!globalThis.__xcnspamshieldContentInitialized__) {
   globalThis.__xcnspamshieldContentInitialized__ = true;
@@ -68,6 +80,9 @@ if (!globalThis.__xcnspamshieldContentInitialized__) {
 }
 
 async function bootstrap(): Promise<void> {
+  registerPageBridgeListener();
+  ensurePageBridgeInjected();
+
   const settingsResponse = await sendContentRuntimeMessage({ type: 'GET_SETTINGS' });
 
   if (!contentContextActive) {
@@ -81,6 +96,50 @@ async function bootstrap(): Promise<void> {
   syncFloatingCaptureCard();
   observeMutations();
   await runScan();
+}
+
+function registerPageBridgeListener(): void {
+  if (pageBridgeListenerRegistered) {
+    return;
+  }
+
+  window.addEventListener(PAGE_BRIDGE_EVENT_NAME, handlePageBridgeIdentities as EventListener);
+  pageBridgeListenerRegistered = true;
+}
+
+function ensurePageBridgeInjected(): void {
+  if (document.getElementById(PAGE_BRIDGE_SCRIPT_ID)) {
+    return;
+  }
+
+  const script = document.createElement('script');
+  script.id = PAGE_BRIDGE_SCRIPT_ID;
+  script.src = chrome.runtime.getURL(PAGE_BRIDGE_SCRIPT_FILE);
+  script.async = false;
+  script.addEventListener('load', () => {
+    script.remove();
+  }, { once: true });
+  script.addEventListener('error', () => {
+    script.remove();
+  }, { once: true });
+
+  (document.head ?? document.documentElement).append(script);
+}
+
+function handlePageBridgeIdentities(event: Event): void {
+  const customEvent = event as CustomEvent<{ identities?: TweetAuthorIdentity[] }>;
+  if (!contentContextActive) {
+    return;
+  }
+
+  const identities = customEvent.detail?.identities ?? [];
+  if (identities.length === 0) {
+    return;
+  }
+
+  if (cacheTweetAuthorIdentities(identities)) {
+    scheduleScan(0);
+  }
 }
 
 async function handleExtraction(sendResponse: (response: CollectedThreadPayload | null) => void): Promise<void> {
@@ -184,14 +243,20 @@ async function performScan(): Promise<void> {
     clearQueuedHiddenState(tweet.article);
   }
 
-  void warmVisibleReplyDecisions(currentThreadId, visibleReplies);
+  void warmVisibleReplyDecisions(
+    currentThreadId,
+    visibleReplies.filter((tweet) => getCachedReplyModerationState(tweet) === null),
+  );
 
   for (const tweet of loadedReplies) {
-    if (getCachedReplyBlockingState(tweet)) {
+    const moderationState = getCachedReplyModerationState(tweet);
+    if (moderationState === 'queued' || moderationState === 'blocked') {
       continue;
     }
 
-    const decision = getCachedReplyDecision(tweet.tweetId);
+    const decision = moderationState === 'whitelisted'
+      ? getDefaultReplyDecisionForModerationState(moderationState)
+      : getCachedReplyDecision(tweet.tweetId);
     if (!decision) {
       clearCollapsedState(tweet.article);
       clearActionButton(tweet.article);
@@ -215,6 +280,8 @@ async function performScan(): Promise<void> {
     if (allowManualToggle && (!shouldCollapse || isExpandedSpam)) {
       ensureActionButton(tweet.article, { isSpam: decision.label === 1, isManual: decision.source === 'manual' }, () => {
         void toggleReply(tweet, decision);
+      }, () => {
+        void queueAuthorForBlock(tweet);
       });
     } else {
       clearActionButton(tweet.article);
@@ -226,12 +293,14 @@ async function refreshReplyBlockingStates(replies: ParsedTweet[]): Promise<void>
   const replyTargets = replies
     .map((tweet) => ({
       replyId: tweet.tweetId,
+      authorId: tweet.authorId,
       author: tweet.author,
     }))
-    .filter((tweet) => tweet.replyId && tweet.author);
+    .filter((tweet) => tweet.replyId && (tweet.author || tweet.authorId));
 
   if (replyTargets.length === 0) {
     replyBlockingStateByAuthor.clear();
+    replyBlockingStateByAuthorId.clear();
     return;
   }
 
@@ -252,26 +321,47 @@ async function refreshReplyBlockingStates(replies: ParsedTweet[]): Promise<void>
 
 function cacheReplyBlockingStates(states: ReplyBlockingStatus[]): void {
   const requestedAuthors = new Set<string>();
+  const requestedAuthorIds = new Set<string>();
   const nextAuthorStates = new Map<string, ReplyBlockingState>();
+  const nextAuthorIdStates = new Map<string, ReplyBlockingState>();
 
   for (const state of states) {
     const normalizedAuthor = normalizeAuthorHandle(state.author);
-    if (!normalizedAuthor) {
+    const normalizedAuthorId = normalizeAuthorId(state.authorId);
+    if (!normalizedAuthor && !normalizedAuthorId) {
       continue;
     }
 
-    requestedAuthors.add(normalizedAuthor);
+    const nextState = state.state;
 
-    if (state.state === 'none') {
+    if (normalizedAuthor) {
+      requestedAuthors.add(normalizedAuthor);
+    }
+    if (normalizedAuthorId) {
+      requestedAuthorIds.add(normalizedAuthorId);
+    }
+
+    if (nextState === 'none') {
       replyBlockingStateByReplyId.delete(state.replyId);
       continue;
     }
 
-    setReplyBlockingStateCache(state.replyId, normalizedAuthor, state.state);
+    const activeState = nextState as Exclude<ReplyBlockingState, 'none'>;
 
-    const currentAuthorState = nextAuthorStates.get(normalizedAuthor);
-    if (!currentAuthorState || currentAuthorState === 'queued') {
-      nextAuthorStates.set(normalizedAuthor, state.state);
+    setReplyBlockingStateCache(state.replyId, normalizedAuthor, normalizedAuthorId, activeState);
+
+    if (normalizedAuthor) {
+      const currentAuthorState = nextAuthorStates.get(normalizedAuthor);
+      if (!currentAuthorState || getReplyStatePriority(activeState) > getReplyStatePriority(currentAuthorState)) {
+        nextAuthorStates.set(normalizedAuthor, activeState);
+      }
+    }
+
+    if (normalizedAuthorId) {
+      const currentAuthorIdState = nextAuthorIdStates.get(normalizedAuthorId);
+      if (!currentAuthorIdState || getReplyStatePriority(activeState) > getReplyStatePriority(currentAuthorIdState)) {
+        nextAuthorIdStates.set(normalizedAuthorId, activeState);
+      }
     }
   }
 
@@ -284,6 +374,16 @@ function cacheReplyBlockingStates(states: ReplyBlockingStatus[]): void {
 
     replyBlockingStateByAuthor.delete(author);
   }
+
+  for (const authorId of requestedAuthorIds) {
+    const nextState = nextAuthorIdStates.get(authorId);
+    if (nextState) {
+      replyBlockingStateByAuthorId.set(authorId, nextState);
+      continue;
+    }
+
+    replyBlockingStateByAuthorId.delete(authorId);
+  }
 }
 
 async function queueAuthorForBlock(tweet: ParsedTweet): Promise<void> {
@@ -292,6 +392,7 @@ async function queueAuthorForBlock(tweet: ParsedTweet): Promise<void> {
   const response = await sendContentRuntimeMessage({
     type: 'QUEUE_BLOCK_AUTHOR',
     author: tweet.author,
+    authorId: tweet.authorId,
     authorName: tweet.authorName,
     replyId: tweet.tweetId,
   });
@@ -316,7 +417,7 @@ async function queueAuthorForBlock(tweet: ParsedTweet): Promise<void> {
   showBlockingFeedback(feedback.tone, feedback.message, feedback.tone === 'success' ? 1800 : 2200);
 
   if (response.data?.active) {
-    setReplyBlockingStateCache(tweet.tweetId, normalizeAuthorHandle(tweet.author), 'queued');
+    setReplyBlockingStateCache(tweet.tweetId, normalizeAuthorHandle(tweet.author), normalizeAuthorId(tweet.authorId), 'queued');
     await runScan();
   }
 }
@@ -446,7 +547,7 @@ async function loadTransientReplies(threadId: string, replies: ParsedTweet[]): P
 
     let hasUpdates = false;
     for (const reply of response.data ?? []) {
-      cacheTransientReply(reply);
+      cachePersistedReply(reply);
       hasUpdates = true;
     }
 
@@ -804,9 +905,15 @@ function deactivateContentContext(): void {
   window.removeEventListener('resize', handleViewportChange);
   pendingStoredReplyIds.clear();
   pendingInferenceReplyIds.clear();
+  clearTweetAuthorIdentityCache();
   replyResultCache.clear();
   replyBlockingStateByReplyId.clear();
   replyBlockingStateByAuthor.clear();
+  replyBlockingStateByAuthorId.clear();
+  if (pageBridgeListenerRegistered) {
+    window.removeEventListener(PAGE_BRIDGE_EVENT_NAME, handlePageBridgeIdentities as EventListener);
+    pageBridgeListenerRegistered = false;
+  }
   captureInProgress = false;
   captureTone = 'idle';
   captureMessage = '';
@@ -815,8 +922,8 @@ function deactivateContentContext(): void {
 }
 
 function clearInjectedTweetUi(): void {
-  document.querySelectorAll(`.${ACTION_BUTTON_CLASS}`).forEach((button) => button.remove());
   for (const article of getLoadedTweetArticles()) {
+    clearActionButton(article);
     clearQueuedHiddenState(article);
     clearCollapsedState(article);
   }
@@ -826,10 +933,22 @@ function normalizeAuthorHandle(author: string): string {
   return author.replace(/^@+/u, '').trim().toLowerCase();
 }
 
-function getCachedReplyBlockingState(tweet: ParsedTweet): Exclude<ReplyBlockingState, 'none'> | null {
+function normalizeAuthorId(authorId?: string): string | undefined {
+  const normalizedAuthorId = authorId?.trim();
+  return normalizedAuthorId || undefined;
+}
+
+function getCachedReplyModerationState(tweet: ParsedTweet): Exclude<ReplyBlockingState, 'none'> | null {
   const replyState = replyBlockingStateByReplyId.get(tweet.tweetId);
   if (replyState && replyState !== 'none') {
     return replyState;
+  }
+
+  const authorIdState = normalizeAuthorId(tweet.authorId)
+    ? replyBlockingStateByAuthorId.get(normalizeAuthorId(tweet.authorId)!)
+    : undefined;
+  if (authorIdState && authorIdState !== 'none') {
+    return authorIdState;
   }
 
   const authorState = replyBlockingStateByAuthor.get(normalizeAuthorHandle(tweet.author));
@@ -840,12 +959,18 @@ function getCachedReplyBlockingState(tweet: ParsedTweet): Exclude<ReplyBlockingS
   return null;
 }
 
+function getCachedReplyBlockingState(tweet: ParsedTweet): Exclude<ReplyBlockingState, 'none' | 'whitelisted'> | null {
+  const moderationState = getCachedReplyModerationState(tweet);
+  return moderationState === 'queued' || moderationState === 'blocked' ? moderationState : null;
+}
+
 function setReplyBlockingStateCache(
   replyId: string,
-  author: string,
+  author: string | undefined,
+  authorId: string | undefined,
   state: Exclude<ReplyBlockingState, 'none'>,
 ): void {
-  if (!replyId || !author) {
+  if (!replyId) {
     return;
   }
 
@@ -862,7 +987,39 @@ function setReplyBlockingStateCache(
     replyBlockingStateByReplyId.delete(oldestReplyId);
   }
 
-  replyBlockingStateByAuthor.set(author, state);
+  if (author) {
+    replyBlockingStateByAuthor.set(author, state);
+  }
+  if (authorId) {
+    replyBlockingStateByAuthorId.set(authorId, state);
+  }
+}
+
+function getReplyStatePriority(state: ReplyBlockingState): number {
+  switch (state) {
+    case 'blocked':
+      return 3;
+    case 'queued':
+      return 2;
+    case 'whitelisted':
+      return 1;
+    case 'none':
+      return 0;
+  }
+}
+
+function getDefaultReplyDecisionForModerationState(
+  moderationState: Exclude<ReplyBlockingState, 'none'> | null,
+): CachedReplyResult | undefined {
+  if (moderationState !== 'whitelisted') {
+    return undefined;
+  }
+
+  return {
+    label: 0,
+    source: 'auto',
+    isPersisted: false,
+  };
 }
 
 function getCachedReplyDecision(replyId: string): CachedReplyResult | undefined {

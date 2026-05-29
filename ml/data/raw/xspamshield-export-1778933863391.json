@@ -5993,7 +5993,7 @@
           "author_name": "Kristine",
           "original_text": "🍎😹🫶\n😁\n😄\n‍🌫️",
           "cleaned_pinyin": ": 🍎 😹 🫶 😁 😄 🌫️",
-          "label": 1,
+          "label": 0,
           "source": "manual",
           "extract_time": 1778933319242,
           "matched_rules": []

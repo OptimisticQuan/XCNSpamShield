@@ -1,5 +1,6 @@
 import '@/popup/styles.css';
 
+import { filterRepliesByReplyId, filterThreadGroupsByReplyId, normalizeReplyIdQuery } from '@/popup/reply-search';
 import { AUTO_BLOCK_MIN_SPAM_REPLIES, BLOCKING_OVERVIEW_PAGE_SIZE } from '@/shared/constants';
 import { sendRuntimeMessage } from '@/shared/messages';
 import type { BlockActionLogView, BlockQueueItemView, BlockingOverview, ExportPayload, ExtensionSettings, ReplyRecord, ThreadGroupView } from '@/shared/types';
@@ -13,9 +14,20 @@ interface PopupState {
   queuePage: number;
   logPage: number;
   threadGroups: ThreadGroupView[];
+  replyIdQuery: string;
   selectedThreadId: string | null;
   loading: boolean;
   message: string;
+}
+
+interface ReplyIdInputSelection {
+  start: number;
+  end: number;
+}
+
+interface RenderOptions {
+  rememberScroll?: boolean;
+  replyIdInputSelection?: ReplyIdInputSelection;
 }
 
 const isStandaloneView = new URLSearchParams(window.location.search).get('view') === 'standalone';
@@ -27,6 +39,7 @@ const state: PopupState = {
   queuePage: 1,
   logPage: 1,
   threadGroups: [],
+  replyIdQuery: '',
   selectedThreadId: null,
   loading: true,
   message: '',
@@ -121,6 +134,11 @@ async function initialize(): Promise<void> {
       return;
     }
 
+    if (actionTarget.matches('[data-action="clear-reply-search"]')) {
+      setReplyIdQuery('', { start: 0, end: 0 });
+      return;
+    }
+
     if (actionTarget.matches('[data-action="open-standalone"]')) {
       void openStandaloneView();
       return;
@@ -169,6 +187,23 @@ async function initialize(): Promise<void> {
       void setShowFloatingCaptureButton(target.checked);
     }
   });
+
+  app.addEventListener('input', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) {
+      return;
+    }
+
+    if (target.matches('[data-action="search-reply-id"]')) {
+      const selectionStart = target.selectionStart ?? target.value.length;
+      const selectionEnd = target.selectionEnd ?? selectionStart;
+
+      setReplyIdQuery(target.value, {
+        start: selectionStart,
+        end: selectionEnd,
+      });
+    }
+  });
 }
 
 async function reload(): Promise<void> {
@@ -193,16 +228,19 @@ async function reload(): Promise<void> {
   render();
 }
 
-function render(options: { rememberScroll?: boolean } = {}): void {
+function render(options: RenderOptions = {}): void {
   if (options.rememberScroll !== false) {
     rememberScrollPositions();
   }
 
   const settings = state.settings;
   const blockingOverview = state.blockingOverview ?? createEmptyBlockingOverview();
-  const selectedGroup = getSelectedThreadGroup();
-  const threadMarkup = state.threadGroups.length
-    ? state.threadGroups
+  const visibleThreadGroups = getVisibleThreadGroups();
+  const selectedGroup = getSelectedThreadGroup(visibleThreadGroups);
+  const visibleReplies = selectedGroup ? filterRepliesByReplyId(selectedGroup.replies, state.replyIdQuery) : [];
+  const hasReplyIdQuery = Boolean(normalizeReplyIdQuery(state.replyIdQuery));
+  const threadMarkup = visibleThreadGroups.length
+    ? visibleThreadGroups
         .map(
           (group) => `
             <button
@@ -223,10 +261,13 @@ function render(options: { rememberScroll?: boolean } = {}): void {
           `,
         )
         .join('')
-    : '<p class="empty-state">本地还没有记录。先在 X 页面点击提取，或在页面内手动标记回复。</p>';
+    : hasReplyIdQuery
+      ? '<p class="empty-state">没有找到匹配当前 reply_id 的记录。</p>'
+      : '<p class="empty-state">本地还没有记录。先在 X 页面点击提取，或在页面内手动标记回复。</p>';
 
   const replyMarkup = selectedGroup
-    ? selectedGroup.replies
+    ? visibleReplies.length
+      ? visibleReplies
         .map(
           (reply) => `
             <article class="reply-card">
@@ -239,7 +280,7 @@ function render(options: { rememberScroll?: boolean } = {}): void {
               </header>
               <p>${escapeHtml(truncate(getDisplayText(reply.originalText, '内容不可见（可能仅包含零宽字符或未提取到 emoji）'), 140))}</p>
               <div class="reply-card-footer">
-                <div class="meta reply-rule-meta">${escapeHtml(formatReplyMeta(reply))}</div>
+                <div class="meta reply-rule-meta">${escapeHtml(`reply_id ${reply.replyId} · ${formatReplyMeta(reply)}`)}</div>
                 <div class="reply-actions">
                   <button class="secondary" data-action="toggle-label" data-reply-id="${reply.replyId}">切换标签</button>
                   <button class="danger" data-action="delete" data-reply-id="${reply.replyId}">删除</button>
@@ -249,6 +290,7 @@ function render(options: { rememberScroll?: boolean } = {}): void {
           `,
         )
         .join('')
+      : '<p class="empty-state">当前线程下没有匹配该 reply_id 的回复。</p>'
     : '<p class="empty-state">选择左侧主贴后，在这里查看对应回复。</p>';
 
   app.innerHTML = `
@@ -258,13 +300,21 @@ function render(options: { rememberScroll?: boolean } = {}): void {
       </section>
       <section class="tab-page ${state.activeTab === 'home' ? 'tab-page-home' : 'tab-page-blocking'}">
         ${state.activeTab === 'home'
-          ? renderHomeTab(settings, selectedGroup, threadMarkup, replyMarkup)
+          ? renderHomeTab(settings, selectedGroup, visibleThreadGroups.length, visibleReplies.length, threadMarkup, replyMarkup)
           : renderBlockingTab(state.activeTab, blockingOverview)}
       </section>
     </main>
   `;
 
   restoreScrollPositions();
+
+  if (options.replyIdInputSelection) {
+    const searchInput = app.querySelector<HTMLInputElement>('[data-action="search-reply-id"]');
+    if (searchInput) {
+      searchInput.focus();
+      searchInput.setSelectionRange(options.replyIdInputSelection.start, options.replyIdInputSelection.end);
+    }
+  }
 }
 
 function renderTabNavigation(blockingOverview: BlockingOverview): string {
@@ -294,9 +344,20 @@ function renderTabButton(tab: PopupTab, label: string, count: number): string {
 function renderHomeTab(
   settings: ExtensionSettings | null,
   selectedGroup: ThreadGroupView | null,
+  visibleThreadCount: number,
+  visibleReplyCount: number,
   threadMarkup: string,
   replyMarkup: string,
 ): string {
+  const hasReplyIdQuery = Boolean(normalizeReplyIdQuery(state.replyIdQuery));
+  const replySummary = hasReplyIdQuery
+    ? selectedGroup
+      ? `命中 ${visibleReplyCount} 条回复`
+      : '没有命中 reply_id'
+    : selectedGroup
+      ? `@${escapeHtml(selectedGroup.mainPost.author)} · ${selectedGroup.replyCount} 条回复`
+      : '未选择主贴';
+
   return `
     <section class="panel toolbar-panel">
       <div class="toolbar-row">
@@ -328,13 +389,31 @@ function renderHomeTab(
       <div class="panel-records-header">
         <div>
           <h2>本地数据</h2>
-          <div class="meta">左侧主贴列表，右侧仅显示当前主贴的回复。</div>
+          <div class="meta">左侧主贴列表，右侧显示当前主贴的回复，支持按 reply_id 快速定位后修改标签。</div>
+        </div>
+        <div class="records-filter">
+          <label class="search-field">
+            <span>按 reply_id 搜索</span>
+            <input
+              class="reply-search-input"
+              type="search"
+              data-action="search-reply-id"
+              placeholder="粘贴完整或部分 reply_id"
+              value="${escapeHtml(state.replyIdQuery)}"
+              spellcheck="false"
+              autocomplete="off"
+            />
+          </label>
+          <button class="secondary micro-button" type="button" data-action="clear-reply-search" ${hasReplyIdQuery ? '' : 'disabled'}>清空</button>
         </div>
       </div>
       <div class="records-columns">
         <section class="thread-column">
           <div class="column-header">
-            <h3>主贴</h3>
+            <div>
+              <h3>主贴</h3>
+              <div class="meta">${hasReplyIdQuery ? `命中 ${visibleThreadCount} 个线程` : `${state.threadGroups.length} 个线程`}</div>
+            </div>
           </div>
           <div class="thread-list-scroll" data-scroll-container="threads">
             <div class="thread-list">${state.loading ? '<p class="empty-state">正在加载...</p>' : threadMarkup}</div>
@@ -344,7 +423,7 @@ function renderHomeTab(
           <div class="column-header">
             <div>
               <h3>回复</h3>
-              <div class="meta">${selectedGroup ? `@${escapeHtml(selectedGroup.mainPost.author)} · ${selectedGroup.replyCount} 条回复` : '未选择主贴'}</div>
+              <div class="meta">${replySummary}</div>
             </div>
           </div>
           <div class="reply-list-scroll" data-scroll-container="replies">
@@ -623,29 +702,52 @@ function removeReplyFromState(replyId: string): void {
   syncSelectedThread();
 }
 
+function setReplyIdQuery(value: string, selection?: ReplyIdInputSelection): void {
+  const queryChanged = state.replyIdQuery !== value;
+  state.replyIdQuery = value;
+
+  if (!queryChanged && !selection) {
+    return;
+  }
+
+  threadListScrollTop = 0;
+  replyListScrollTop = 0;
+  syncSelectedThread();
+  render({
+    rememberScroll: false,
+    replyIdInputSelection: selection,
+  });
+}
+
 function sortThreadGroups(threadGroups: ThreadGroupView[]): ThreadGroupView[] {
   return [...threadGroups].sort((left, right) => right.lastExtractTime - left.lastExtractTime);
 }
 
 function syncSelectedThread(preferredThreadId?: string): void {
-  if (preferredThreadId && state.threadGroups.some((group) => group.threadId === preferredThreadId)) {
+  const visibleThreadGroups = getVisibleThreadGroups();
+
+  if (preferredThreadId && visibleThreadGroups.some((group) => group.threadId === preferredThreadId)) {
     state.selectedThreadId = preferredThreadId;
     return;
   }
 
-  if (state.selectedThreadId && state.threadGroups.some((group) => group.threadId === state.selectedThreadId)) {
+  if (state.selectedThreadId && visibleThreadGroups.some((group) => group.threadId === state.selectedThreadId)) {
     return;
   }
 
-  state.selectedThreadId = state.threadGroups[0]?.threadId ?? null;
+  state.selectedThreadId = visibleThreadGroups[0]?.threadId ?? null;
 }
 
-function getSelectedThreadGroup(): ThreadGroupView | null {
+function getSelectedThreadGroup(threadGroups = getVisibleThreadGroups()): ThreadGroupView | null {
   if (!state.selectedThreadId) {
     return null;
   }
 
-  return state.threadGroups.find((group) => group.threadId === state.selectedThreadId) ?? null;
+  return threadGroups.find((group) => group.threadId === state.selectedThreadId) ?? null;
+}
+
+function getVisibleThreadGroups(): ThreadGroupView[] {
+  return filterThreadGroupsByReplyId(state.threadGroups, state.replyIdQuery);
 }
 
 function rememberScrollPositions(): void {

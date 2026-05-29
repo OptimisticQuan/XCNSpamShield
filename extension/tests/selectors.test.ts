@@ -2,9 +2,14 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { cacheTweetAuthorIdentities, clearTweetAuthorIdentityCache } from '@/content/page-identity-cache';
 import { collectParsedTweets, extractMainTweet, parseTweetArticle } from '@/content/selectors';
 
 describe('selectors', () => {
+  beforeEach(() => {
+    clearTweetAuthorIdentityCache();
+  });
+
   it('parses a detail-page tweet using the canonical status link and avatar handle', () => {
     document.body.innerHTML = `
       <main>
@@ -32,6 +37,7 @@ describe('selectors', () => {
     const parsed = parseTweetArticle(article!);
     expect(parsed).toMatchObject({
       tweetId: '1234567890',
+      authorId: undefined,
       author: 'some_author',
       authorName: '示例昵称',
       text: 'reply content',
@@ -222,10 +228,55 @@ describe('selectors', () => {
     const secondParsed = parseTweetArticle(article!);
     expect(secondParsed).toMatchObject({
       tweetId: '2222222222',
+      authorId: undefined,
       author: 'second_user',
       authorName: '第二个用户',
       text: 'second content',
       timestamp: Date.parse('2025-05-15T12:00:00.000Z'),
+    });
+  });
+
+  it('hydrates authorId from the page identity cache even when the article node is reused', () => {
+    document.body.innerHTML = `
+      <main>
+        <section data-testid="primaryColumn">
+          <article data-testid="tweet">
+            <div data-testid="Tweet-User-Avatar">
+              <div data-testid="UserAvatar-Container-some_author"></div>
+            </div>
+            <div data-testid="User-Name">
+              <a href="/some_author"><span>示例昵称</span></a>
+              <a href="/some_author"><span>@some_author</span></a>
+            </div>
+            <div data-testid="tweetText">reply content</div>
+            <a href="https://x.com/some_author/status/1234567890">
+              <time datetime="2025-05-15T10:00:00.000Z"></time>
+            </a>
+          </article>
+        </section>
+      </main>
+    `;
+
+    const article = document.querySelector<HTMLElement>('article[data-testid="tweet"]');
+    expect(parseTweetArticle(article!)).toMatchObject({
+      tweetId: '1234567890',
+      authorId: undefined,
+    });
+
+    cacheTweetAuthorIdentities([
+      {
+        tweetId: '1234567890',
+        authorId: '9988776655',
+        author: 'some_author',
+        authorName: '示例昵称',
+      },
+    ]);
+
+    expect(parseTweetArticle(article!)).toMatchObject({
+      tweetId: '1234567890',
+      authorId: '9988776655',
+      author: 'some_author',
+      authorName: '示例昵称',
     });
   });
 });

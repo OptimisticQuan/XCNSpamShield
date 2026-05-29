@@ -1,22 +1,26 @@
 import {
-  AUTO_BLOCK_MIN_SPAM_REPLIES,
+  AUTHOR_SCORE_BLOCK_THRESHOLD,
   BLOCK_QUEUE_ALARM_NAME,
   BLOCK_QUEUE_DELAY_MS,
   BLOCK_QUEUE_RETRY_DELAY_MS,
   BLOCKING_OVERVIEW_PAGE_SIZE,
 } from '@/shared/constants';
-import type { BlockingOverview, ReplyBlockingState, ReplyBlockingStatus, ReplyBlockingTarget } from '@/shared/types';
+import { normalizeModerationAuthor, shouldAutoQueueAuthor } from '@/shared/author-moderation';
+import type { BlockingOverview, ReplyBlockingState, ReplyBlockingStatus, ReplyBlockingTarget, ReplyRecord } from '@/shared/types';
 import {
   addBlockLog,
+  deleteAuthorState,
   deleteBlockQueueItem,
-  getAuthorSpamSummary,
+  getAuthorSpamSummaryByIdentity,
+  getAuthorStates,
   getBlockQueueItem,
   getLatestSuccessfulBlockLog,
   getNextBlockQueueRunAt,
+  listBlockLogEntries,
   listBlockQueueItems,
   listBlockingOverview,
   putBlockQueueItem,
-  type AuthorSpamSummary,
+  type StoredAuthorState,
   type StoredBlockLogEntry,
   type StoredBlockQueueItem,
 } from '@/storage/db';
@@ -32,10 +36,15 @@ export function initializeBlockQueueProcessing(): void {
   void processDueBlockQueueItem();
 }
 
-export async function refreshAutoBlockQueueForAuthors(authors: string[]): Promise<void> {
-  const uniqueAuthors = Array.from(new Set(authors.map(normalizeAuthor).filter(Boolean)));
-  for (const author of uniqueAuthors) {
-    await refreshAutoBlockQueueForAuthor(author);
+export async function refreshAutoBlockQueueForReplies(
+  replies: Array<Pick<ReplyRecord, 'authorId' | 'author' | 'authorName' | 'replyId'>>,
+): Promise<void> {
+  const uniqueReplies = dedupeRepliesByAuthorIdentity(replies);
+  const authorStates = await getAuthorStates(uniqueReplies.map((reply) => reply.author));
+  const authorStatesByAuthor = new Map(authorStates.map((authorState) => [authorState.author, authorState]));
+
+  for (const reply of uniqueReplies) {
+    await refreshAutoBlockQueueForReply(reply, authorStatesByAuthor.get(normalizeAuthor(reply.author)) ?? null);
   }
 
   await scheduleBlockQueueAlarm();
@@ -55,35 +64,68 @@ export async function getReplyBlockingStates(replies: ReplyBlockingTarget[]): Pr
   const normalizedReplies = replies
     .map((reply) => ({
       replyId: reply.replyId.trim(),
+      authorId: normalizeAuthorId(reply.authorId),
       author: normalizeAuthor(reply.author),
     }))
-    .filter((reply) => reply.replyId && reply.author);
+    .filter((reply) => reply.replyId && (reply.author || reply.authorId));
 
   if (normalizedReplies.length === 0) {
     return [];
   }
 
-  const uniqueAuthors = Array.from(new Set(normalizedReplies.map((reply) => reply.author)));
-  const [queueItems, latestLogs] = await Promise.all([
-    Promise.all(uniqueAuthors.map((author) => getBlockQueueItem(author))),
-    Promise.all(uniqueAuthors.map((author) => getLatestSuccessfulBlockLog(author))),
+  const [queueItems, blockLogs, authorStates] = await Promise.all([
+    listBlockQueueItems(),
+    listBlockLogEntries(),
+    getAuthorStates(normalizedReplies.map((reply) => reply.author)),
   ]);
 
-  const queueItemsByAuthor = new Map(uniqueAuthors.map((author, index) => [author, queueItems[index] ?? null]));
-  const latestLogsByAuthor = new Map(uniqueAuthors.map((author, index) => [author, latestLogs[index] ?? null]));
+  const queueItemsByAuthor = new Map<string, StoredBlockQueueItem>();
+  const queueItemsByAuthorId = new Map<string, StoredBlockQueueItem>();
+  for (const queueItem of queueItems) {
+    if (!queueItemsByAuthor.has(queueItem.author)) {
+      queueItemsByAuthor.set(queueItem.author, queueItem);
+    }
+    if (queueItem.authorId && !queueItemsByAuthorId.has(queueItem.authorId)) {
+      queueItemsByAuthorId.set(queueItem.authorId, queueItem);
+    }
+  }
+
+  const latestLogsByAuthor = new Map<string, StoredBlockLogEntry>();
+  const latestLogsByAuthorId = new Map<string, StoredBlockLogEntry>();
+  for (const logEntry of blockLogs) {
+    if (logEntry.status !== 'success') {
+      continue;
+    }
+
+    if (!latestLogsByAuthor.has(logEntry.author)) {
+      latestLogsByAuthor.set(logEntry.author, logEntry);
+    }
+    if (logEntry.authorId && !latestLogsByAuthorId.has(logEntry.authorId)) {
+      latestLogsByAuthorId.set(logEntry.authorId, logEntry);
+    }
+  }
+
+  const authorStatesByAuthor = new Map(authorStates.map((authorState) => [authorState.author, authorState]));
 
   return normalizedReplies.map((reply) => ({
     ...reply,
-    state: resolveReplyBlockingState(reply, queueItemsByAuthor.get(reply.author) ?? null, latestLogsByAuthor.get(reply.author) ?? null),
+    state: resolveReplyBlockingState(
+      reply,
+      resolveIdentityMatch(reply, queueItemsByAuthor, queueItemsByAuthorId),
+      resolveIdentityMatch(reply, latestLogsByAuthor, latestLogsByAuthorId),
+      reply.author ? authorStatesByAuthor.get(reply.author) ?? null : null,
+    ),
   }));
 }
 
 export async function queueBlockAuthor(
   author: string,
   authorName?: string,
+  authorId?: string,
   replyId?: string,
 ): Promise<{ queued: boolean; active: boolean; action: 'queued' | 'already-queued' | 'replaced-unblock' | 'noop' }> {
   const normalizedAuthor = normalizeAuthor(author);
+  const normalizedAuthorId = normalizeAuthorId(authorId);
   if (!normalizedAuthor) {
     return { queued: false, active: false, action: 'noop' };
   }
@@ -92,10 +134,14 @@ export async function queueBlockAuthor(
   if (existing?.action === 'block') {
     await putBlockQueueItem({
       ...existing,
+      authorId: normalizedAuthorId || existing.authorId,
       authorName: authorName || existing.authorName,
       spamReplyIds: mergeReplyIds(existing.spamReplyIds, replyId),
       updatedAt: Date.now(),
     });
+    if (normalizedAuthor) {
+      await deleteAuthorState(normalizedAuthor);
+    }
     return { queued: false, active: true, action: 'already-queued' };
   }
 
@@ -103,10 +149,11 @@ export async function queueBlockAuthor(
     await cancelBlockQueueAuthor(normalizedAuthor);
   }
 
-  const summary = await getAuthorSpamSummary(normalizedAuthor);
+  const summary = await getAuthorSpamSummaryByIdentity(normalizedAuthorId, normalizedAuthor);
   const queuedAt = Date.now();
   await putBlockQueueItem({
     author: normalizedAuthor,
+    authorId: normalizedAuthorId,
     authorName: authorName || summary?.authorName || normalizedAuthor,
     action: 'block',
     state: 'queued',
@@ -117,6 +164,9 @@ export async function queueBlockAuthor(
     spamReplyCount: summary?.spamReplyCount ?? 1,
     spamReplyIds: mergeReplyIds(summary?.spamReplyIds, replyId),
   });
+  if (normalizedAuthor) {
+    await deleteAuthorState(normalizedAuthor);
+  }
   await scheduleBlockQueueAlarm();
   return {
     queued: true,
@@ -139,6 +189,7 @@ export async function cancelBlockQueueAuthor(author: string): Promise<boolean> {
   await deleteBlockQueueItem(normalizedAuthor);
   await addBlockLog({
     author: existing.author,
+    authorId: existing.authorId,
     authorName: existing.authorName,
     action: existing.action,
     status: 'cancelled',
@@ -175,6 +226,7 @@ export async function queueUnblockAuthor(author: string): Promise<{ queued: bool
   const queuedAt = Date.now();
   await putBlockQueueItem({
     author: normalizedAuthor,
+    authorId: latestSuccessfulLog.authorId,
     authorName: latestSuccessfulLog.authorName || normalizedAuthor,
     action: 'unblock',
     state: 'queued',
@@ -203,25 +255,38 @@ export async function getBlockingOverviewData(
   );
 }
 
-async function refreshAutoBlockQueueForAuthor(author: string): Promise<void> {
-  const summary = await getAuthorSpamSummary(author);
-  const existing = await getBlockQueueItem(author);
+async function refreshAutoBlockQueueForReply(
+  reply: Pick<ReplyRecord, 'authorId' | 'author' | 'authorName' | 'replyId'>,
+  authorState: StoredAuthorState | null,
+): Promise<void> {
+  const normalizedAuthor = normalizeAuthor(reply.author);
+  if (!normalizedAuthor) {
+    return;
+  }
 
-  if (!summary || summary.spamReplyCount < AUTO_BLOCK_MIN_SPAM_REPLIES) {
+  const normalizedAuthorId = normalizeAuthorId(reply.authorId);
+  const existing = await getBlockQueueItem(normalizedAuthor);
+
+  if (authorState?.isWhitelisted) {
     if (existing?.action === 'block') {
-      await cancelBlockQueueAuthor(author);
+      await cancelBlockQueueAuthor(normalizedAuthor);
     }
     return;
   }
 
-  const latestSuccessfulLog = await getLatestSuccessfulBlockLog(author);
-  if (!shouldAutoQueueBlock(summary, latestSuccessfulLog?.action ?? null, latestSuccessfulLog?.createdAt ?? 0)) {
-    if (existing?.action === 'block' && latestSuccessfulLog?.action === 'block') {
-      await deleteBlockQueueItem(author);
+  if (!authorState || !shouldAutoQueueAuthor(authorState.score)) {
+    return;
+  }
+
+  const latestSuccessfulLog = await getLatestSuccessfulBlockLog(normalizedAuthor);
+  if (latestSuccessfulLog?.action === 'block') {
+    if (existing?.action === 'block') {
+      await deleteBlockQueueItem(normalizedAuthor);
     }
     return;
   }
 
+  const summary = await getAuthorSpamSummaryByIdentity(normalizedAuthorId, normalizedAuthor);
   if (existing) {
     if (existing.action !== 'block') {
       return;
@@ -229,26 +294,28 @@ async function refreshAutoBlockQueueForAuthor(author: string): Promise<void> {
 
     await putBlockQueueItem({
       ...existing,
-      authorName: summary.authorName,
+      authorId: normalizedAuthorId || existing.authorId,
+      authorName: reply.authorName || authorState.authorName || summary?.authorName || existing.authorName,
       updatedAt: Date.now(),
-      spamReplyCount: summary.spamReplyCount,
-      spamReplyIds: mergeReplyIds(existing.spamReplyIds, ...summary.spamReplyIds),
+      spamReplyCount: summary?.spamReplyCount ?? Math.max(existing.spamReplyCount, AUTHOR_SCORE_BLOCK_THRESHOLD),
+      spamReplyIds: mergeReplyIds(existing.spamReplyIds, ...(summary?.spamReplyIds ?? []), reply.replyId),
     });
     return;
   }
 
   const queuedAt = Date.now();
   await putBlockQueueItem({
-    author,
-    authorName: summary.authorName,
+    author: normalizedAuthor,
+    authorId: normalizedAuthorId,
+    authorName: reply.authorName || authorState.authorName || summary?.authorName || normalizedAuthor,
     action: 'block',
     state: 'queued',
     queuedAt,
     updatedAt: queuedAt,
     nextRunAt: await reserveNextRunAt(queuedAt),
     attemptCount: 0,
-    spamReplyCount: summary.spamReplyCount,
-    spamReplyIds: mergeReplyIds(summary.spamReplyIds),
+    spamReplyCount: summary?.spamReplyCount ?? AUTHOR_SCORE_BLOCK_THRESHOLD,
+    spamReplyIds: mergeReplyIds(summary?.spamReplyIds, reply.replyId),
   });
 }
 
@@ -327,6 +394,7 @@ async function runNextDueBlockQueueItem(): Promise<void> {
     await deleteBlockQueueItem(processingItem.author);
     await addBlockLog({
       author: processingItem.author,
+      authorId: processingItem.authorId,
       authorName: processingItem.authorName,
       action: processingItem.action,
       status: 'success',
@@ -338,6 +406,10 @@ async function runNextDueBlockQueueItem(): Promise<void> {
       spamReplyCount: processingItem.spamReplyCount,
       spamReplyIds: processingItem.spamReplyIds,
     });
+
+    if (processingItem.action === 'block') {
+      await deleteAuthorState(processingItem.author);
+    }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     await putBlockQueueItem({
@@ -350,6 +422,7 @@ async function runNextDueBlockQueueItem(): Promise<void> {
     });
     await addBlockLog({
       author: processingItem.author,
+      authorId: processingItem.authorId,
       authorName: processingItem.authorName,
       action: processingItem.action,
       status: 'failed',
@@ -367,34 +440,20 @@ async function runNextDueBlockQueueItem(): Promise<void> {
   }
 }
 
-export function shouldAutoQueueBlock(
-  summary: AuthorSpamSummary,
-  latestSuccessfulAction: 'block' | 'unblock' | null,
-  latestSuccessfulActionAt: number,
-): boolean {
-  if (summary.spamReplyCount < AUTO_BLOCK_MIN_SPAM_REPLIES) {
-    return false;
-  }
-
-  if (latestSuccessfulAction === 'block') {
-    return false;
-  }
-
-  if (latestSuccessfulAction === 'unblock' && summary.latestSpamExtractTime <= latestSuccessfulActionAt) {
-    return false;
-  }
-
-  return true;
+function normalizeAuthor(author: string): string {
+  return normalizeModerationAuthor(author) ?? '';
 }
 
-function normalizeAuthor(author: string): string {
-  return author.trim().replace(/^@/u, '');
+function normalizeAuthorId(authorId?: string): string | undefined {
+  const normalizedAuthorId = authorId?.trim();
+  return normalizedAuthorId || undefined;
 }
 
 function resolveReplyBlockingState(
   reply: ReplyBlockingTarget,
   queueItem: StoredBlockQueueItem | null,
   latestSuccessfulLog: StoredBlockLogEntry | null,
+  authorState: StoredAuthorState | null,
 ): ReplyBlockingState {
   if (queueItem?.action === 'block') {
     return 'queued';
@@ -405,14 +464,55 @@ function resolveReplyBlockingState(
   }
 
   if (queueItem?.spamReplyIds.includes(reply.replyId)) {
-    return queueItem.action === 'block' ? 'queued' : 'none';
+    return 'none';
   }
 
-  if (latestSuccessfulLog?.action === 'block' && latestSuccessfulLog.spamReplyIds?.includes(reply.replyId)) {
-    return 'blocked';
+  if (authorState?.isWhitelisted) {
+    return 'whitelisted';
   }
 
   return 'none';
+}
+
+function resolveIdentityMatch<T extends { author: string; authorId?: string }>(
+  reply: ReplyBlockingTarget,
+  matchesByAuthor: Map<string, T>,
+  matchesByAuthorId: Map<string, T>,
+): T | null {
+  const normalizedAuthorId = normalizeAuthorId(reply.authorId);
+  if (normalizedAuthorId && matchesByAuthorId.has(normalizedAuthorId)) {
+    return matchesByAuthorId.get(normalizedAuthorId) ?? null;
+  }
+
+  const normalizedAuthor = normalizeAuthor(reply.author);
+  if (normalizedAuthor && matchesByAuthor.has(normalizedAuthor)) {
+    return matchesByAuthor.get(normalizedAuthor) ?? null;
+  }
+
+  return null;
+}
+
+function dedupeRepliesByAuthorIdentity(
+  replies: Array<Pick<ReplyRecord, 'authorId' | 'author' | 'authorName' | 'replyId'>>,
+): Array<Pick<ReplyRecord, 'authorId' | 'author' | 'authorName' | 'replyId'>> {
+  const repliesByAuthor = new Map<string, Pick<ReplyRecord, 'authorId' | 'author' | 'authorName' | 'replyId'>>();
+
+  for (const reply of replies) {
+    const normalizedAuthorId = normalizeAuthorId(reply.authorId);
+    const normalizedAuthor = normalizeAuthor(reply.author);
+    const key = normalizedAuthor || normalizedAuthorId;
+    if (!key) {
+      continue;
+    }
+
+    repliesByAuthor.set(key, {
+      ...reply,
+      authorId: normalizedAuthorId,
+      author: normalizedAuthor,
+    });
+  }
+
+  return Array.from(repliesByAuthor.values());
 }
 
 function mergeReplyIds(replyIds: Iterable<string> | undefined, ...extraReplyIds: Array<string | undefined>): string[] {

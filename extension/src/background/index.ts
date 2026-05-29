@@ -6,11 +6,26 @@ import {
   initializeBlockQueueProcessing,
   queueBlockAuthor,
   queueUnblockAuthor,
-  refreshAutoBlockQueueForAuthors,
+  refreshAutoBlockQueueForReplies,
 } from '@/background/block-queue';
 import { clearCachedReplyDecisions, deleteCachedReplyDecision, syncCachedReplyDecision } from '@/background/reply-decision-cache';
 import { buildManualReplyRecord, evaluateCollectedReplies, evaluateCollectedThread, processCollectedThread } from '@/background/thread-processor';
-import { buildExportPayload, clearAll, deleteReply, getReplyRecord, getReplyRecords, getSettings, listReplies, listThreadGroups, setBlockingEnabled, setFloatingCapturePosition, setShowFloatingCaptureButton, toggleReplyLabel, upsertThreadPayload } from '@/storage/db';
+import {
+  buildExportPayload,
+  clearAll,
+  deleteReply,
+  getReplyRecord,
+  getReplyRecords,
+  getSettings,
+  listReplies,
+  listThreadGroups,
+  setBlockingEnabled,
+  setFloatingCapturePosition,
+  setShowFloatingCaptureButton,
+  toggleReplyLabel,
+  upsertReplyRecords,
+  upsertThreadPayload,
+} from '@/storage/db';
 import type { RuntimeRequest, RuntimeResponse } from '@/shared/messages';
 import type { CollectedThreadPayload, ReplyRecord } from '@/shared/types';
 import type { ReplyDecisionTraceContext } from '@/background/thread-processor';
@@ -79,14 +94,14 @@ async function handleRuntimeMessage(message: RuntimeRequest): Promise<RuntimeRes
       await deleteReply(message.replyId);
       deleteCachedReplyDecision(message.replyId);
       if (reply) {
-        await refreshAutoBlockQueueForAuthors([reply.author]);
+        await refreshAutoBlockQueueForReplies([reply]);
       }
       return success({ replyId: message.replyId });
     }
     case 'TOGGLE_REPLY_LABEL': {
       const reply = await toggleReplyLabel(message.replyId);
       syncCachedReplyDecision(reply);
-      await refreshAutoBlockQueueForAuthors([reply.author]);
+      await refreshAutoBlockQueueForReplies([reply]);
       return success(reply);
     }
     case 'CLEAR_ALL':
@@ -120,7 +135,13 @@ async function handleRuntimeMessage(message: RuntimeRequest): Promise<RuntimeRes
         await runReplyDecisionRequest(
           'CLASSIFY_REPLIES',
           message.payload.replies.length,
-          (traceContext) => evaluateCollectedReplies(message.payload.threadId, message.payload.replies, settings, traceContext),
+          async (traceContext) => {
+            const replies = await evaluateCollectedReplies(message.payload.threadId, message.payload.replies, settings, traceContext);
+            const storedReplies = await upsertReplyRecords(replies);
+            storedReplies.forEach((reply) => syncCachedReplyDecision(reply));
+            await refreshAutoBlockQueueForReplies(storedReplies);
+            return storedReplies;
+          },
           (replies) => ({ completedReplies: replies.length }),
         ),
       );
@@ -140,6 +161,8 @@ async function handleRuntimeMessage(message: RuntimeRequest): Promise<RuntimeRes
             replies: [reply],
           });
 
+          await refreshAutoBlockQueueForReplies(stored.replies);
+
           return stored.replies[0] ?? reply;
         },
         (reply) => ({ replyId: reply.replyId, label: reply.label }),
@@ -152,7 +175,7 @@ async function handleRuntimeMessage(message: RuntimeRequest): Promise<RuntimeRes
     case 'GET_REPLY_RECORD':
       return success(await getReplyRecord(message.replyId));
     case 'QUEUE_BLOCK_AUTHOR': {
-      const result = await queueBlockAuthor(message.author, message.authorName, message.replyId);
+      const result = await queueBlockAuthor(message.author, message.authorName, message.authorId, message.replyId);
       return success({ author: message.author, ...result });
     }
     case 'CANCEL_BLOCK_QUEUE_AUTHOR': {
@@ -208,7 +231,7 @@ async function upsertCollectedThread(
       const processed = await processCollectedThread(payload, settings, traceContext);
       const result = await upsertThreadPayload(processed);
       result.replies.forEach((reply) => syncCachedReplyDecision(reply));
-      await refreshAutoBlockQueueForAuthors(result.replies.map((reply) => reply.author));
+      await refreshAutoBlockQueueForReplies(result.replies);
 
       return {
         savedReplies: result.savedReplies,
