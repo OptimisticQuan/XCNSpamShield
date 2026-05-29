@@ -27,7 +27,7 @@ import {
   upsertThreadPayload,
 } from '@/storage/db';
 import type { RuntimeRequest, RuntimeResponse } from '@/shared/messages';
-import type { CollectedThreadPayload, ReplyRecord } from '@/shared/types';
+import type { CollectedReply, CollectedThreadPayload, ReplyClassificationPayload, ReplyRecord } from '@/shared/types';
 import type { ReplyDecisionTraceContext } from '@/background/thread-processor';
 
 const X_TAB_MATCHERS = ['https://x.com/*', 'https://twitter.com/*'] as const;
@@ -46,8 +46,8 @@ chrome.runtime.onStartup.addListener(() => {
 
 initializeBlockQueueProcessing();
 
-chrome.runtime.onMessage.addListener((message: RuntimeRequest, _sender, sendResponse) => {
-  void handleRuntimeMessage(message)
+chrome.runtime.onMessage.addListener((message: RuntimeRequest, sender, sendResponse) => {
+  void handleRuntimeMessage(message, sender)
     .then((response) => sendResponse(response))
     .catch((error: unknown) => {
       sendResponse({
@@ -59,7 +59,10 @@ chrome.runtime.onMessage.addListener((message: RuntimeRequest, _sender, sendResp
   return true;
 });
 
-async function handleRuntimeMessage(message: RuntimeRequest): Promise<RuntimeResponse<unknown>> {
+async function handleRuntimeMessage(
+  message: RuntimeRequest,
+  sender?: chrome.runtime.MessageSender,
+): Promise<RuntimeResponse<unknown>> {
   switch (message.type) {
     case 'GET_SETTINGS':
       return success(await getSettings());
@@ -114,8 +117,8 @@ async function handleRuntimeMessage(message: RuntimeRequest): Promise<RuntimeRes
       return success(payload);
     }
     case 'EXTRACT_CURRENT_PAGE': {
-      const payload = await requestPageExtraction();
-      const result = await upsertCollectedThread(payload, 'EXTRACT_CURRENT_PAGE');
+      const { payload, tabId } = await requestPageExtraction();
+      const result = await upsertCollectedThread(payload, 'EXTRACT_CURRENT_PAGE', tabId);
       return success({ savedReplies: result.savedReplies });
     }
     case 'CLASSIFY_COLLECTED_THREAD': {
@@ -135,19 +138,13 @@ async function handleRuntimeMessage(message: RuntimeRequest): Promise<RuntimeRes
         await runReplyDecisionRequest(
           'CLASSIFY_REPLIES',
           message.payload.replies.length,
-          async (traceContext) => {
-            const replies = await evaluateCollectedReplies(message.payload.threadId, message.payload.replies, settings, traceContext);
-            const storedReplies = await upsertReplyRecords(replies);
-            storedReplies.forEach((reply) => syncCachedReplyDecision(reply));
-            await refreshAutoBlockQueueForReplies(storedReplies);
-            return storedReplies;
-          },
+          (traceContext) => classifyRepliesWithOptionalAvatarRecheck(message.payload, settings, sender?.tab?.id, traceContext),
           (replies) => ({ completedReplies: replies.length }),
         ),
       );
     }
     case 'UPSERT_COLLECTED_THREAD':
-      return success(await upsertCollectedThread(message.payload, 'UPSERT_COLLECTED_THREAD'));
+      return success(await upsertCollectedThread(message.payload, 'UPSERT_COLLECTED_THREAD', sender?.tab?.id));
     case 'UPSERT_MANUAL_REPLY': {
       const settings = await getSettings();
       const result = await runReplyDecisionRequest(
@@ -196,7 +193,7 @@ function success<T>(data: T): RuntimeResponse<T> {
   };
 }
 
-async function requestPageExtraction(): Promise<CollectedThreadPayload> {
+async function requestPageExtraction(): Promise<{ payload: CollectedThreadPayload; tabId: number }> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) {
     throw new Error('No active tab is available.');
@@ -207,7 +204,10 @@ async function requestPageExtraction(): Promise<CollectedThreadPayload> {
   }
 
   await ensureContentScript(tab.id);
-  return sendPageExtractionRequest(tab.id);
+  return {
+    payload: await sendPageExtractionRequest(tab.id),
+    tabId: tab.id,
+  };
 }
 
 async function sendPageExtractionRequest(tabId: number): Promise<CollectedThreadPayload> {
@@ -222,6 +222,7 @@ async function sendPageExtractionRequest(tabId: number): Promise<CollectedThread
 async function upsertCollectedThread(
   payload: CollectedThreadPayload,
   requestType: 'UPSERT_COLLECTED_THREAD' | 'EXTRACT_CURRENT_PAGE',
+  tabId?: number,
 ): Promise<{ savedReplies: number; replies: ReplyRecord[] }> {
   const settings = await getSettings();
   return runReplyDecisionRequest(
@@ -233,9 +234,17 @@ async function upsertCollectedThread(
       result.replies.forEach((reply) => syncCachedReplyDecision(reply));
       await refreshAutoBlockQueueForReplies(result.replies);
 
+      const replies = await recheckRepliesWithAvatarOcr(
+        tabId,
+        payload.threadId,
+        result.replies,
+        settings,
+        traceContext,
+      );
+
       return {
         savedReplies: result.savedReplies,
-        replies: result.replies,
+        replies,
       };
     },
     (result) => ({
@@ -262,6 +271,112 @@ async function lookupReplyRecords(replyIds: string[]): Promise<ReplyRecord[]> {
   });
 
   return replies;
+}
+
+async function classifyRepliesWithOptionalAvatarRecheck(
+  payload: ReplyClassificationPayload,
+  settings: Awaited<ReturnType<typeof getSettings>>,
+  tabId: number | undefined,
+  traceContext: ReplyDecisionTraceContext,
+): Promise<ReplyRecord[]> {
+  const replies = await evaluateCollectedReplies(payload.threadId, payload.replies, settings, traceContext);
+  const storedReplies = await upsertReplyRecords(replies);
+  storedReplies.forEach((reply) => syncCachedReplyDecision(reply));
+  await refreshAutoBlockQueueForReplies(storedReplies);
+
+  return recheckRepliesWithAvatarOcr(tabId, payload.threadId, storedReplies, settings, traceContext);
+}
+
+async function recheckRepliesWithAvatarOcr(
+  tabId: number | undefined,
+  threadId: string,
+  replies: ReplyRecord[],
+  settings: Awaited<ReturnType<typeof getSettings>>,
+  traceContext: ReplyDecisionTraceContext,
+): Promise<ReplyRecord[]> {
+  if (typeof tabId !== 'number') {
+    return replies;
+  }
+
+  const replyIds = replies
+    .filter((reply) => reply.label === 0 && reply.source === 'auto')
+    .map((reply) => reply.replyId);
+
+  if (replyIds.length === 0) {
+    return replies;
+  }
+
+  const avatarRecheckReplies = await requestReplyAvatarDataUrls(tabId, replyIds);
+  if (avatarRecheckReplies.length === 0) {
+    return replies;
+  }
+
+  const recheckedReplies = await evaluateCollectedReplies(threadId, avatarRecheckReplies, settings, traceContext);
+  const storedRecheckedReplies = await upsertReplyRecords(recheckedReplies);
+  storedRecheckedReplies.forEach((reply) => syncCachedReplyDecision(reply));
+  await refreshAutoBlockQueueForReplies(storedRecheckedReplies);
+
+  return mergeReplyRecords(replies, storedRecheckedReplies);
+}
+
+async function requestReplyAvatarDataUrls(tabId: number, replyIds: string[]): Promise<CollectedReply[]> {
+  if (replyIds.length === 0) {
+    return [];
+  }
+
+  const startedAt = performance.now();
+  await ensureContentScript(tabId);
+
+  try {
+    const response = (await chrome.tabs.sendMessage(tabId, {
+      type: 'REQUEST_REPLY_AVATAR_DATA_URLS',
+      replyIds,
+    })) as unknown;
+
+    const replies = isCollectedReplyArray(response) ? response : [];
+    console.info('[XCNSpamShield][avatar-recheck-request]', {
+      tabId,
+      requestedReplyCount: replyIds.length,
+      matchedReplyCount: replies.length,
+      durationMs: roundDuration(performance.now() - startedAt),
+    });
+    return replies;
+  } catch (error) {
+    console.info('[XCNSpamShield][avatar-recheck-request]', {
+      tabId,
+      requestedReplyCount: replyIds.length,
+      matchedReplyCount: 0,
+      durationMs: roundDuration(performance.now() - startedAt),
+      error: error instanceof Error ? error.message : 'Unknown avatar recheck request error',
+    });
+    return [];
+  }
+}
+
+function mergeReplyRecords(baseReplies: ReplyRecord[], updatedReplies: ReplyRecord[]): ReplyRecord[] {
+  if (updatedReplies.length === 0) {
+    return baseReplies;
+  }
+
+  const updatedRepliesById = new Map(updatedReplies.map((reply) => [reply.replyId, reply]));
+  return baseReplies.map((reply) => updatedRepliesById.get(reply.replyId) ?? reply);
+}
+
+function isCollectedReplyArray(value: unknown): value is CollectedReply[] {
+  return Array.isArray(value) && value.every((item) => isCollectedReply(item));
+}
+
+function isCollectedReply(value: unknown): value is CollectedReply {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const reply = value as Partial<CollectedReply>;
+  return typeof reply.replyId === 'string'
+    && typeof reply.author === 'string'
+    && typeof reply.authorName === 'string'
+    && typeof reply.text === 'string'
+    && typeof reply.timestamp === 'number';
 }
 
 function isCollectedThreadPayload(value: unknown): value is CollectedThreadPayload {

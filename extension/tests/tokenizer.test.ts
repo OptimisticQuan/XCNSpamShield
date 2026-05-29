@@ -7,8 +7,16 @@ describe('tokenizer', () => {
     expect(normalizeToPinyinWords('这只猫好乖。')).toBe('zhe zhi mao hao guai');
   });
 
+  it('drops raw latin fragments that segment into standalone single-letter syllables', () => {
+    expect(normalizeReplyToPinyinWords('晓萱', '约 m 一下 n', '头像引流')).toBe('tou xiang yin liu : xiao xuan : yue yi xia');
+  });
+
   it('maps confusable digits, greek letters, and cyrillic letters to latin lookalikes before segmentation', () => {
     expect(normalizeToPinyinWords('ѕ4ο')).toBe('sao');
+  });
+
+  it('keeps single-letter pinyin produced from Han text while dropping raw latin noise', () => {
+    expect(normalizeToPinyinWords('阿 m 呢 n')).toBe('a ne');
   });
 
   it('normalizes reply text with author name, keeps emoji, and drops non-pinyin english', () => {

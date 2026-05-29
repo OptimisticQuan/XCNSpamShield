@@ -11,6 +11,7 @@ function createContentBuild(entryFile: string, outputFileName: string, globalNam
       alias: {
         '@': path.resolve(root, 'src'),
       },
+      conditions: ['onnxruntime-web-use-extern-wasm'],
     },
     build: {
       outDir: path.resolve(root, 'dist'),

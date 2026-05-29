@@ -11,6 +11,7 @@ export default defineConfig({
     alias: {
       '@': path.resolve(root, 'src'),
     },
+    conditions: ['onnxruntime-web-use-extern-wasm'],
   },
   build: {
     outDir: path.resolve(root, 'dist'),
@@ -19,6 +20,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         popup: path.resolve(root, 'popup.html'),
+        offscreen: path.resolve(root, 'offscreen.html'),
         background: path.resolve(root, 'src/background/index.ts'),
       },
       output: {

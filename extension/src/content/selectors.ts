@@ -6,6 +6,7 @@ export interface ParsedTweet {
   authorId?: string;
   author: string;
   authorName: string;
+  avatarImageUrl?: string;
   text: string;
   timestamp: number;
 }
@@ -67,6 +68,7 @@ export function parseTweetArticle(article: HTMLElement): ParsedTweet | null {
     authorId: undefined,
     author: extractAuthorHandle(article, statusLink) ?? 'unknown',
     authorName: extractAuthorName(article) ?? extractAuthorHandle(article, statusLink) ?? 'unknown',
+    avatarImageUrl: extractAvatarImageUrl(article) ?? undefined,
     text: tweetText,
     timestamp: timestampValue ? Date.parse(timestampValue) : Date.now(),
   };
@@ -167,6 +169,13 @@ function extractAuthorName(article: HTMLElement): string | null {
   }
 
   return null;
+}
+
+function extractAvatarImageUrl(article: HTMLElement): string | null {
+  const avatarImage = queryOwnTweetElement<HTMLImageElement>(article, 'div[data-testid="Tweet-User-Avatar"] img')
+    ?? queryOwnTweetElement<HTMLImageElement>(article, 'div[data-testid^="UserAvatar-Container-"] img');
+  const avatarImageUrl = avatarImage?.currentSrc || avatarImage?.src || '';
+  return avatarImageUrl.trim() || null;
 }
 
 function extractTweetText(tweetTextNode: HTMLElement | null): string {

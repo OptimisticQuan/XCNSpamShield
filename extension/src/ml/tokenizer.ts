@@ -21,9 +21,13 @@ export function normalizeToPinyinWords(text: string): string {
   return normalizeStructuredText(text);
 }
 
-export function normalizeReplyToPinyinWords(authorName: string, text: string): string {
-  const normalizedAuthor = authorName.trim();
-  return normalizeStructuredText(normalizedAuthor ? `${normalizedAuthor}:${text}` : text);
+export function normalizeReplyToPinyinWords(authorName: string, text: string, avatarOcrText?: string): string {
+  const structuredText = [avatarOcrText ?? '', authorName, text]
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0)
+    .join(':');
+
+  return normalizeStructuredText(structuredText || text);
 }
 
 export function tokenizeCleanedPinyin(cleanedPinyin: string): string[] {
@@ -41,8 +45,8 @@ export function tokenizeCleanedPinyin(cleanedPinyin: string): string[] {
   return truncated;
 }
 
-export function tokenizeReply(authorName: string, text: string): string[] {
-  return tokenizeCleanedPinyin(normalizeReplyToPinyinWords(authorName, text));
+export function tokenizeReply(authorName: string, text: string, avatarOcrText?: string): string[] {
+  return tokenizeCleanedPinyin(normalizeReplyToPinyinWords(authorName, text, avatarOcrText));
 }
 
 export async function tokensToIds(tokens: string[]): Promise<number[]> {
@@ -75,7 +79,7 @@ function normalizeStructuredText(text: string): string {
     }
 
     const segmented = segmentPinyinSequence(alphaBuffer.toLowerCase());
-    if (segmented) {
+    if (segmented && isAcceptedLatinPinyinSequence(segmented)) {
       tokens.push(...segmented);
     }
     alphaBuffer = '';
@@ -177,6 +181,10 @@ function segmentFromIndex(value: string, startIndex: number, memo: Map<number, s
 
   memo.set(startIndex, null);
   return null;
+}
+
+function isAcceptedLatinPinyinSequence(tokens: string[]): boolean {
+  return tokens.every((token) => token.length > 1);
 }
 
 function consumeEmojiToken(characters: string[], startIndex: number): { value: string; nextIndex: number } | null {

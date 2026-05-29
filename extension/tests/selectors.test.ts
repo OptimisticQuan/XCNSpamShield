@@ -16,7 +16,9 @@ describe('selectors', () => {
         <section data-testid="primaryColumn">
           <article data-testid="tweet">
             <div data-testid="Tweet-User-Avatar">
-              <div data-testid="UserAvatar-Container-some_author"></div>
+              <div data-testid="UserAvatar-Container-some_author">
+                <img src="https://pbs.twimg.com/profile_images/example_normal.jpg" />
+              </div>
             </div>
             <div data-testid="User-Name">
               <a href="/some_author"><span>示例昵称</span></a>
@@ -40,6 +42,7 @@ describe('selectors', () => {
       authorId: undefined,
       author: 'some_author',
       authorName: '示例昵称',
+      avatarImageUrl: 'https://pbs.twimg.com/profile_images/example_normal.jpg',
       text: 'reply content',
       timestamp: Date.parse('2025-05-15T10:00:00.000Z'),
     });

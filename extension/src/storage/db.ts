@@ -455,6 +455,7 @@ function sanitizeReplyRecord(reply: ReplyRecord): ReplyRecord {
     ...reply,
     authorId: reply.authorId?.trim() || undefined,
     authorName: reply.authorName || reply.author,
+    avatarOcrText: reply.avatarOcrText?.trim() || undefined,
     cleanedPinyin: reply.cleanedPinyin?.trim() || undefined,
     matchedRules: [],
   };
@@ -468,7 +469,11 @@ function ensureReplyCleanedPinyin(reply: ReplyRecord): ReplyRecord & { cleanedPi
 
   return {
     ...sanitizedReply,
-    cleanedPinyin: normalizeReplyToPinyinWords(sanitizedReply.authorName || sanitizedReply.author, sanitizedReply.originalText),
+    cleanedPinyin: normalizeReplyToPinyinWords(
+      sanitizedReply.authorName || sanitizedReply.author,
+      sanitizedReply.originalText,
+      sanitizedReply.avatarOcrText,
+    ),
   };
 }
 

@@ -42,6 +42,7 @@ export function syncCachedReplyDecision(reply: ReplyRecord): void {
     source: reply.source,
     matchedRules: [],
     cleanedPinyin: reply.cleanedPinyin ?? '',
+    avatarOcrText: reply.avatarOcrText,
     modelConfidence: reply.modelConfidence,
   });
 }

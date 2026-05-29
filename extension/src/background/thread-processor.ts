@@ -1,4 +1,5 @@
 import { getCachedReplyDecision, setCachedReplyDecision } from '@/background/reply-decision-cache';
+import { resolveAvatarOcrResult } from '@/background/avatar-ocr';
 import { predictSpamScore } from '@/ml/model-loader';
 import { normalizeReplyToPinyinWords, tokenizeCleanedPinyin, tokensToIds } from '@/ml/tokenizer';
 import type {
@@ -54,14 +55,17 @@ export async function buildManualReplyRecord(
   _settings: ExtensionSettings,
   _traceContext?: ReplyDecisionTraceContext,
 ): Promise<ReplyRecord> {
+  const avatarOcrText = payload.reply.avatarOcrText?.trim() || undefined;
+
   return {
     threadId: payload.threadId,
     replyId: payload.reply.replyId,
     authorId: payload.reply.authorId,
     author: payload.reply.author,
     authorName: payload.reply.authorName,
+    avatarOcrText,
     originalText: payload.reply.text,
-    cleanedPinyin: payload.cleanedPinyin,
+    cleanedPinyin: payload.cleanedPinyin?.trim() || buildReplyModelContext(payload.reply.authorName, payload.reply.text, avatarOcrText),
     label: payload.label,
     source: 'manual',
     extractTime: Date.now(),
@@ -84,6 +88,7 @@ async function buildReplyRecord(
     authorId: reply.authorId,
     author: reply.author,
     authorName: reply.authorName,
+    avatarOcrText: decision.avatarOcrText,
     originalText: reply.text,
     cleanedPinyin: decision.cleanedPinyin || undefined,
     label: decision.label,
@@ -105,7 +110,7 @@ async function buildReplyDecision(
   let cacheReadMs = 0;
   let featurePrepMs = 0;
   let inferenceMs = 0;
-  let decisionPath: 'cache' | 'inference' = 'cache';
+  let decisionPath: 'cache' | 'inference' | 'avatar-recheck' = 'cache';
   let finalDecision: SpamDecision | undefined;
   let errorMessage: string | undefined;
 
@@ -115,21 +120,31 @@ async function buildReplyDecision(
     const cacheLookupStartedAt = performance.now();
     const cachedDecision = getCachedReplyDecision(reply.replyId);
     cacheReadMs = performance.now() - cacheLookupStartedAt;
-    if (cachedDecision) {
+    if (cachedDecision && !reply.forceAvatarOcrRecheck) {
       finalDecision = resolveCachedDecision(cachedDecision, modelThreshold);
       return finalDecision;
     }
 
-    decisionPath = 'inference';
+    const cachedAutoDecision = cachedDecision ? resolveCachedDecision(cachedDecision, modelThreshold) : undefined;
+    decisionPath = reply.forceAvatarOcrRecheck ? 'avatar-recheck' : 'inference';
     const featurePrepStartedAt = performance.now();
-    const cleanedPinyin = buildReplyModelContext(reply.authorName, reply.text);
+    const avatarOcrText = reply.avatarOcrText?.trim() || undefined;
+    const acceptedAvatarOcrText = avatarOcrText
+      ?? await resolveAcceptedAvatarOcrText(reply, cachedAutoDecision);
+
+    if (!acceptedAvatarOcrText && cachedAutoDecision && reply.forceAvatarOcrRecheck) {
+      finalDecision = cachedAutoDecision;
+      return finalDecision;
+    }
+
+    const cleanedPinyin = buildReplyModelContext(reply.authorName, reply.text, acceptedAvatarOcrText);
     const tokenIds = await tokensToIds(tokenizeCleanedPinyin(cleanedPinyin));
     featurePrepMs = performance.now() - featurePrepStartedAt;
 
     const inferenceStartedAt = performance.now();
     const modelScore = await predictSpamScore(tokenIds);
     inferenceMs = performance.now() - inferenceStartedAt;
-    finalDecision = buildAutoDecision(cleanedPinyin, modelScore, modelThreshold);
+    finalDecision = buildAutoDecision(cleanedPinyin, acceptedAvatarOcrText, modelScore, modelThreshold);
 
     setCachedReplyDecision(reply.replyId, finalDecision);
     return finalDecision;
@@ -163,21 +178,61 @@ function resolveCachedDecision(cachedDecision: SpamDecision, modelThreshold: num
     };
   }
 
-  return buildAutoDecision(cachedDecision.cleanedPinyin, cachedDecision.modelConfidence ?? null, modelThreshold);
+  return buildAutoDecision(
+    cachedDecision.cleanedPinyin,
+    cachedDecision.avatarOcrText,
+    cachedDecision.modelConfidence ?? null,
+    modelThreshold,
+  );
 }
 
-function buildAutoDecision(cleanedPinyin: string, modelScore: number | null, modelThreshold: number): SpamDecision {
+function buildAutoDecision(
+  cleanedPinyin: string,
+  avatarOcrText: string | undefined,
+  modelScore: number | null,
+  modelThreshold: number,
+): SpamDecision {
   return {
     label: (modelScore ?? 0) >= modelThreshold ? 1 : 0,
     source: 'auto',
     matchedRules: [],
     modelConfidence: modelScore ?? undefined,
     cleanedPinyin,
+    avatarOcrText,
   };
 }
 
-function buildReplyModelContext(authorName: string, replyText: string): string {
-  return normalizeReplyToPinyinWords(authorName, replyText);
+function buildReplyModelContext(authorName: string, replyText: string, avatarOcrText?: string): string {
+  return normalizeReplyToPinyinWords(authorName, replyText, avatarOcrText);
+}
+
+async function resolveAcceptedAvatarOcrText(
+  reply: CollectedReply,
+  cachedDecision: SpamDecision | undefined,
+): Promise<string | undefined> {
+  if (!reply.forceAvatarOcrRecheck) {
+    return undefined;
+  }
+
+  if (!reply.avatarImageDataUrl?.trim()) {
+    return cachedDecision?.avatarOcrText;
+  }
+
+  const avatarOcrResult = await resolveAvatarOcrResult({
+    avatarImageUrl: reply.avatarImageUrl,
+    avatarImageDataUrl: reply.avatarImageDataUrl,
+    avatarImageLoadDurationMs: reply.avatarImageLoadDurationMs,
+  });
+
+  if (!avatarOcrResult?.avatarOcrText) {
+    return undefined;
+  }
+
+  if ((avatarOcrResult.ocrConfidence ?? 0) <= 0.5) {
+    return undefined;
+  }
+
+  return avatarOcrResult.avatarOcrText;
 }
 
 function logReplyDecisionTrace({
@@ -197,7 +252,7 @@ function logReplyDecisionTrace({
   traceContext?: ReplyDecisionTraceContext;
   replyId: string;
   modelThreshold: number;
-  decisionPath: 'cache' | 'inference';
+  decisionPath: 'cache' | 'inference' | 'avatar-recheck';
   queueWaitMs: number;
   cacheReadMs: number;
   featurePrepMs: number;

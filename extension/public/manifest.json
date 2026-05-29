@@ -3,14 +3,17 @@
   "name": "XCNSpamShield",
   "version": "0.1.0",
   "description": "Detect, fold, queue-block, export, and retrain against Chinese spam replies on X/Twitter.",
-  "permissions": ["storage", "activeTab", "scripting", "downloads", "alarms", "cookies"],
-  "host_permissions": ["https://x.com/*", "https://twitter.com/*"],
+  "permissions": ["storage", "activeTab", "scripting", "downloads", "alarms", "cookies", "offscreen"],
+  "host_permissions": ["https://x.com/*", "https://twitter.com/*", "https://pbs.twimg.com/*", "https://abs.twimg.com/*"],
   "action": {
     "default_popup": "popup.html"
   },
   "background": {
     "service_worker": "background.js",
     "type": "module"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
   },
   "content_scripts": [
     {

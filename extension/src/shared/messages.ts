@@ -73,6 +73,7 @@ export interface RuntimeResponse<T> {
 export type ContentRequest =
   | { type: 'PING' }
   | { type: 'REQUEST_PAGE_EXTRACTION' }
+  | { type: 'REQUEST_REPLY_AVATAR_DATA_URLS'; replyIds: string[] }
   | { type: 'APPLY_SETTINGS'; settings: ExtensionSettings };
 
 export async function sendRuntimeMessage<T extends RuntimeRequest>(

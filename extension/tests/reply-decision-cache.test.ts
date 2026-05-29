@@ -64,6 +64,7 @@ describe('reply decision cache', () => {
       source: 'manual',
       matchedRules: [],
       cleanedPinyin: 'zhu ye neng da',
+      avatarOcrText: undefined,
       modelConfidence: 0.18,
     });
   });

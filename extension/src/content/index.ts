@@ -6,7 +6,7 @@ import { applyCollapsedState, applyQueuedHiddenState, clearCollapsedState, clear
 import { mutationsAffectOnlyInjectedUi } from '@/content/mutation-filter';
 import { cacheTweetAuthorIdentities, clearTweetAuthorIdentityCache, type TweetAuthorIdentity } from '@/content/page-identity-cache';
 import { cachedReplyResultFromRecord, ReplyResultCache, resolveCachedReplyResult, type CachedReplyResult } from '@/content/reply-result-cache';
-import { collectCurrentThread, toCollectedReply } from '@/content/extractor';
+import { collectCurrentThread, collectRepliesForAvatarOcrRecheck, toCollectedReply } from '@/content/extractor';
 import { collectParsedTweets, getLoadedTweetArticles, isStatusPage, type ParsedTweet } from '@/content/selectors';
 import {
   ACTION_BUTTON_CLASS,
@@ -66,6 +66,11 @@ if (!globalThis.__xcnspamshieldContentInitialized__) {
 
     if (message.type === 'REQUEST_PAGE_EXTRACTION') {
       void handleExtraction(sendResponse);
+      return true;
+    }
+
+    if (message.type === 'REQUEST_REPLY_AVATAR_DATA_URLS') {
+      void handleReplyAvatarDataUrlRequest(message.replyIds, sendResponse);
       return true;
     }
 
@@ -149,6 +154,26 @@ async function handleExtraction(sendResponse: (response: CollectedThreadPayload 
   } catch (error) {
     console.error('XCNSpamShield extraction failed', error);
     sendResponse(null);
+  }
+}
+
+async function handleReplyAvatarDataUrlRequest(
+  replyIds: string[],
+  sendResponse: (response: ReturnType<typeof collectRepliesForAvatarOcrRecheck> extends Promise<infer T> ? T : never) => void,
+): Promise<void> {
+  try {
+    await bootstrapPromise;
+    if (!contentContextActive || replyIds.length === 0) {
+      sendResponse([]);
+      return;
+    }
+
+    const replyIdSet = new Set(replyIds);
+    const replies = collectParsedTweets().filter((tweet) => replyIdSet.has(tweet.tweetId));
+    sendResponse(await collectRepliesForAvatarOcrRecheck(replies));
+  } catch (error) {
+    console.error('XCNSpamShield avatar data URL collection failed', error);
+    sendResponse([]);
   }
 }
 
@@ -524,15 +549,14 @@ async function loadTransientReplies(threadId: string, replies: ParsedTweet[]): P
     return false;
   }
 
-  const collectedReplies = missingReplies.map(toCollectedReply);
-  collectedReplies.forEach((reply) => pendingInferenceReplyIds.add(reply.replyId));
+  missingReplies.forEach((tweet) => pendingInferenceReplyIds.add(tweet.tweetId));
 
   try {
     const response = await sendContentRuntimeMessage({
       type: 'CLASSIFY_REPLIES',
       payload: {
         threadId,
-        replies: collectedReplies,
+        replies: missingReplies.map(toCollectedReply),
       },
     });
 
@@ -553,7 +577,7 @@ async function loadTransientReplies(threadId: string, replies: ParsedTweet[]): P
 
     return hasUpdates;
   } finally {
-    collectedReplies.forEach((reply) => pendingInferenceReplyIds.delete(reply.replyId));
+    missingReplies.forEach((tweet) => pendingInferenceReplyIds.delete(tweet.tweetId));
   }
 }
 

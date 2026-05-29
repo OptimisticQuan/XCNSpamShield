@@ -16,6 +16,11 @@ export interface CollectedReply {
   authorId?: string;
   author: string;
   authorName: string;
+  avatarImageUrl?: string;
+  avatarImageDataUrl?: string;
+  avatarImageLoadDurationMs?: number;
+  avatarOcrText?: string;
+  forceAvatarOcrRecheck?: boolean;
   text: string;
   timestamp: number;
 }
@@ -56,6 +61,7 @@ export interface ReplyRecord {
   authorId?: string;
   author: string;
   authorName: string;
+  avatarOcrText?: string;
   originalText: string;
   cleanedPinyin?: string;
   label: SpamLabel;
@@ -117,6 +123,7 @@ export interface SpamDecision {
   source: LabelSource;
   matchedRules: string[];
   cleanedPinyin: string;
+  avatarOcrText?: string;
   modelConfidence?: number;
 }
 
